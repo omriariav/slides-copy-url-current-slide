@@ -1,17 +1,19 @@
 {
   "manifest_version": 3,
   "name": "Google Slides Current Slide URL Copier",
-  "version": "1.0",
-  "description": "Adds a button to copy the URL for the current slide in Google Slides",
+  "version": "1.1",
+  "description": "Adds a button to copy the URL for the current slide in Google Slides with enhanced detection",
   "permissions": ["activeTab", "clipboardWrite"],
   "content_scripts": [
     {
       "matches": [
         "https://docs.google.com/presentation/*",
-        "https://docs.googleusercontent.com/*"   
+        "https://docs.googleusercontent.com/*",
+        "https://docs.google.com/drivesharing/*"
       ],
       "js": ["content.js"],
-      "run_at": "document_end"
+      "run_at": "document_start",
+      "all_frames": true
     }
   ],
   "icons": {
