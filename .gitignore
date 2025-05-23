@@ -1,0 +1,108 @@
+# Chrome Extension specific files
+*.crx
+*.pem
+*.zip
+
+# Extension build artifacts
+dist/
+build/
+web-ext-artifacts/
+
+# Development dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Logs
+logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# nyc test coverage
+.nyc_output
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# Temporary folders
+tmp/
+temp/
+
+# Web extension development
+web-ext-config.js
+
+# Documentation build artifacts
+docs/_build/
+
+# Testing artifacts
+test-results/
+screenshots/
+
+# Development certificates
+localhost.pem
+localhost-key.pem
+
+# Chrome extension development
+manifest.json.backup
+*.backup
+
+# Webpack/Rollup/Parcel artifacts
+.cache/
+.parcel-cache/
+
+# Chrome Web Store assets (keep in separate repo/folder)
+store-assets/
+promotional-images/
+*.psd
+*.sketch
+
+# Development scripts output
+debug.log
+extension-debug/ 
