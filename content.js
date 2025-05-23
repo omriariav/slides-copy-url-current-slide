@@ -28,9 +28,8 @@
     isShareIframe: false,
     frameType: 'unknown',
     lastLogTime: 0,
-    loggedElements: new Map(), // FIX: Changed from Set to Map for timestamp tracking
-    shareDialogFound: false, // Flag to stop after finding share dialog
-    slideUrlButtonInjected: false // Flag to track if we've injected our button
+    loggedElements: new Map(), // For timestamp tracking to prevent log spam
+    isInjecting: false // Flag to prevent concurrent injections
   };
   
   // Throttling function to prevent log spam
@@ -114,9 +113,9 @@
       setupMainFrameMessageHandler();
     }
     
-    // Start periodic dialog scanning for debugging (less frequent)
+    // Set up efficient event-driven share button detection
     if (DEBUG) {
-      startPeriodicDialogScan();
+      setupShareButtonClickDetection();
       
       // Immediately scan for existing dialogs
       verboseLog('🔍 IMMEDIATE SCAN - Checking for existing dialogs in', state.frameType);
@@ -497,11 +496,6 @@
     
     // Set up dialog close detection to reset state
     setupDialogCloseDetection();
-    
-    // Remove the failing injection attempts since Google sanitizes the dialog
-    // Note: Google's security system removes any buttons injected into share dialog
-    log('ℹ️ Note: Direct dialog injection disabled due to Google security measures');
-    log('ℹ️ Using overlay button instead - more reliable and visible!');
   }
   
   /**
@@ -646,13 +640,20 @@
    * Show the main overlay button positioned next to Copy link button
    */
   function injectTestButton() {
+    // Prevent concurrent injections
+    if (state.isInjecting) {
+      log('⚠️ Injection already in progress, skipping...');
+      return;
+    }
+    
+    state.isInjecting = true;
     log('🎯 SHOWING SLIDE URL OVERLAY BUTTON NEXT TO COPY LINK...');
     
-    // Remove any existing overlay button
-    const existing = document.getElementById('slide-url-copy-button-overlay');
-    if (existing) {
-      existing.remove();
-      log('Removed existing overlay button');
+    // Remove ALL existing overlay buttons (use more thorough cleanup)
+    const existingButtons = document.querySelectorAll('#slide-url-copy-button-overlay, .slide-url-overlay-button');
+    if (existingButtons.length > 0) {
+      log(`🧹 Removing ${existingButtons.length} existing overlay button(s)`);
+      existingButtons.forEach(btn => btn.remove());
     }
     
     // Create the overlay button
@@ -701,6 +702,7 @@
         window.removeEventListener('resize', repositionButton);
         window.removeEventListener('scroll', repositionButton);
         document.removeEventListener('click', dismissOnClickOutside);
+        state.isInjecting = false; // Reset flag
         log('🎯 Overlay button dismissed by click outside');
       }
     };
@@ -724,6 +726,9 @@
       `;
       document.head.appendChild(style);
     }
+    
+    // Reset injection flag after setup is complete
+    state.isInjecting = false;
     
     return overlayButton;
   }
@@ -1181,26 +1186,6 @@
   }
   
   /**
-   * Add periodic dialog scanning for debugging (reduced frequency)
-   */
-  function startPeriodicDialogScan() {
-    log('Starting periodic dialog scan (reduced frequency)...');
-    
-    setInterval(() => {
-      const dialogs = document.querySelectorAll('[role="dialog"], [role="alertdialog"], .docs-dialog, .modal');
-      if (dialogs.length > 0) {
-        log('🔍 PERIODIC SCAN - Found dialogs:', dialogs.length);
-        // Only log the first dialog to avoid spam
-        if (dialogs[0] && !state.loggedElements.has('periodic-dialog-scan')) {
-          verboseLog(`📋 Dialog summary only (set VERBOSE_LOGGING=true for details)`);
-          logDialogElement('🎯 EXISTING DIALOG', dialogs[0], 'periodic scan');
-          state.loggedElements.set('periodic-dialog-scan', Date.now());
-        }
-      }
-    }, 15000); // Reduced to every 15 seconds
-  }
-  
-  /**
    * Enhanced button state management following Grammarly's patterns
    */
   function updateButtonState(button, state, message = null) {
@@ -1283,181 +1268,12 @@
   }
   
   /**
-   * Find optimal insertion point using Grammarly's insertion strategy
-   */
-  function findOptimalInsertionPoint(copyLinkButton) {
-    // Try multiple strategies to find the best place to insert
-    const strategies = [
-      // Strategy 1: Insert after copy link button in same container
-      () => ({
-        container: copyLinkButton.parentElement,
-        referenceNode: copyLinkButton.nextSibling,
-        method: 'insertBefore'
-      }),
-      
-      // Strategy 2: Insert in button group container
-      () => {
-        const buttonGroup = copyLinkButton.closest('[role="group"], .button-group, .actions');
-        if (buttonGroup) {
-          return {
-            container: buttonGroup,
-            referenceNode: null,
-            method: 'appendChild'
-          };
-        }
-        return null;
-      },
-      
-      // Strategy 3: Insert in dialog footer
-      () => {
-        const dialog = copyLinkButton.closest('[role="dialog"]');
-        const footer = dialog?.querySelector('.footer, .actions, [class*="footer"], [class*="action"]');
-        if (footer) {
-          return {
-            container: footer,
-            referenceNode: null,
-            method: 'appendChild'
-          };
-        }
-        return null;
-      }
-    ];
-    
-    for (const strategy of strategies) {
-      const result = strategy();
-      if (result && result.container) {
-        log('📍 Selected insertion strategy:', {
-          method: result.method,
-          container: {
-            tagName: result.container.tagName,
-            className: result.container.className,
-            id: result.container.id
-          }
-        });
-        return result;
-      }
-    }
-    
-    // Fallback to original strategy
-    return {
-      container: copyLinkButton.parentElement,
-      referenceNode: copyLinkButton.nextSibling,
-      method: 'insertBefore'
-    };
-  }
-  
-  /**
-   * Inject our "Copy slide URL" button using Grammarly's enhanced approach
-   */
-  function injectSlideUrlButton(copyLinkButton) {
-    log('🚀 INJECTING COPY SLIDE URL BUTTON (Enhanced Grammarly Style)...');
-    
-    // Log the target location
-    log('📍 INJECTION TARGET:', {
-      targetButton: copyLinkButton.textContent.trim(),
-      targetParent: {
-        tagName: copyLinkButton.parentElement.tagName,
-        className: copyLinkButton.parentElement.className,
-        jsname: copyLinkButton.parentElement.getAttribute('jsname')
-      }
-    });
-    
-    // Create the button using Grammarly's approach
-    const slideUrlButton = createSlideUrlButton();
-    
-    // Add the click handler
-    slideUrlButton.addEventListener('click', createButtonClickHandler(slideUrlButton));
-    
-    // Find optimal insertion point
-    const insertionPoint = findOptimalInsertionPoint(copyLinkButton);
-    
-    // Insert the button
-    if (insertionPoint.method === 'insertBefore' && insertionPoint.referenceNode) {
-      insertionPoint.container.insertBefore(slideUrlButton, insertionPoint.referenceNode);
-    } else {
-      insertionPoint.container.appendChild(slideUrlButton);
-    }
-    
-    // Enhanced logging
-    log('✅ SLIDE URL BUTTON SUCCESSFULLY INJECTED:', {
-      buttonElement: slideUrlButton,
-      buttonHTML: slideUrlButton.outerHTML.substring(0, 200) + '...',
-      insertionMethod: insertionPoint.method,
-      parentContainer: {
-        tagName: insertionPoint.container.tagName,
-        className: insertionPoint.container.className,
-        childrenCount: insertionPoint.container.children.length
-      },
-      buttonProperties: {
-        id: slideUrlButton.id,
-        textContent: slideUrlButton.textContent,
-        className: slideUrlButton.className,
-        'data-testid': slideUrlButton.getAttribute('data-testid')
-      }
-    });
-    
-    // Set flag to prevent multiple injections
-    state.slideUrlButtonInjected = true;
-    
-    // Test button visibility and accessibility
-    setTimeout(() => {
-      const isVisible = slideUrlButton.offsetParent !== null;
-      const rect = slideUrlButton.getBoundingClientRect();
-      
-      log('🔍 BUTTON VISIBILITY CHECK:', {
-        isVisible,
-        offsetParent: slideUrlButton.offsetParent?.tagName,
-        boundingRect: {
-          width: rect.width,
-          height: rect.height,
-          top: rect.top,
-          left: rect.left
-        },
-        computedStyle: {
-          display: getComputedStyle(slideUrlButton).display,
-          visibility: getComputedStyle(slideUrlButton).visibility,
-          opacity: getComputedStyle(slideUrlButton).opacity
-        }
-      });
-      
-      if (!isVisible) {
-        log('⚠️ Button may not be visible - checking parent containers...');
-        let parent = slideUrlButton.parentElement;
-        let level = 0;
-        while (parent && level < 5) {
-          const parentRect = parent.getBoundingClientRect();
-          log(`  Parent level ${level}:`, {
-            tagName: parent.tagName,
-            className: parent.className,
-            isVisible: parent.offsetParent !== null,
-            boundingRect: {
-              width: parentRect.width,
-              height: parentRect.height
-            },
-            display: getComputedStyle(parent).display,
-            visibility: getComputedStyle(parent).visibility
-          });
-          parent = parent.parentElement;
-          level++;
-        }
-      }
-    }, 100);
-    
-    log('🛑 INJECTION COMPLETE. Stopping further processing.');
-  }
-  
-  /**
-   * Set up detection for when the share dialog closes
+   * Simplified dialog close detection - just clean up overlay button when needed
    */
   function setupDialogCloseDetection() {
-    log('📋 Setting up dialog close detection...');
+    log('📋 Setting up simple dialog close detection...');
     
-    // FIX: Clear any existing observers first
-    if (window.dialogCloseObserver) {
-      window.dialogCloseObserver.disconnect();
-    }
-    
-    // Watch for dialog elements being removed from DOM
+    // Simple cleanup when dialog is removed
     const dialogObserver = new MutationObserver((mutations) => {
       mutations.forEach(mutation => {
         mutation.removedNodes.forEach(node => {
@@ -1465,81 +1281,137 @@
             // Check if a dialog was removed
             const isDialog = node.matches && (
               node.matches('[role="dialog"]') || 
-              node.matches('[role="alertdialog"]') ||
-              node.matches('.modal') ||
-              node.matches('.popup')
+              node.matches('[role="alertdialog"]')
             );
             
             // Or if it contains dialogs
             const containsDialog = node.querySelectorAll && 
-              node.querySelectorAll('[role="dialog"], [role="alertdialog"], .modal, .popup').length > 0;
+              node.querySelectorAll('[role="dialog"], [role="alertdialog"]').length > 0;
               
             if (isDialog || containsDialog) {
               log('🚪 Share dialog closed - cleaning up overlay button');
               
-              // Remove overlay button
+              // Just remove overlay button - no need for complex state management
               const overlayButton = document.getElementById('slide-url-copy-button-overlay');
               if (overlayButton) {
                 overlayButton.remove();
-                log('✅ Overlay button removed due to dialog close');
+                log('✅ Overlay button removed - ready for next share button click');
               }
               
-              // FIX: Reset all relevant state
-              resetDialogState();
-              
-              // Clean up observer
+              // Reset injection flag and clean up this observer
+              state.isInjecting = false;
               dialogObserver.disconnect();
-              window.dialogCloseObserver = null;
             }
           }
         });
       });
     });
     
-    // Store observer globally for cleanup
-    window.dialogCloseObserver = dialogObserver;
-    
-    // Observe the document for removed nodes
+    // Observe for dialog removal
     dialogObserver.observe(document.body, {
       childList: true,
       subtree: true
     });
+  }
+  
+  /**
+   * Set up event-driven share button click detection - much more efficient!
+   */
+  function setupShareButtonClickDetection() {
+    log('🎯 Setting up share button click detection...');
     
-    // Also check for dialog closure via visibility changes
-    const checkDialogVisibility = () => {
+    // Listen for clicks on the document
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      
+      // Check if clicked element matches share button criteria
+      if (target && 
+          target.tagName === 'DIV' && 
+          target.getAttribute('role') === 'button' && 
+          target.getAttribute('aria-label') && 
+          target.getAttribute('aria-label').startsWith('Share')) {
+        
+        log('🎯 SHARE BUTTON CLICKED!', {
+          element: target,
+          ariaLabel: target.getAttribute('aria-label'),
+          className: target.className
+        });
+        
+        // Wait for the share dialog to appear
+        waitForShareDialog();
+      }
+    }, true); // Use capture phase to catch the event early
+    
+    log('✅ Share button click detection set up');
+  }
+  
+  /**
+   * Wait for share dialog to appear after share button click
+   */
+  function waitForShareDialog() {
+    log('⏳ Waiting for share dialog to appear...');
+    
+    let attempts = 0;
+    let dialogFound = false; // Flag to prevent continued checking
+    const maxAttempts = 20; // Check for 2 seconds
+    
+    const checkForDialog = () => {
+      // Don't continue if we already found and processed a dialog
+      if (dialogFound) {
+        return;
+      }
+      
+      attempts++;
+      
+      // Look for dialog elements
       const dialogs = document.querySelectorAll('[role="dialog"], [role="alertdialog"]');
-      if (dialogs.length === 0) {
-        log('🚪 No dialogs visible - cleaning up overlay button');
-        const overlayButton = document.getElementById('slide-url-copy-button-overlay');
-        if (overlayButton) {
-          overlayButton.remove();
-          log('✅ Overlay button removed - no dialogs visible');
+      
+      if (dialogs.length > 0) {
+        log('✅ Share dialog detected!', dialogs.length, 'dialogs found');
+        
+        // Find the dialog with share-related content
+        const shareDialog = Array.from(dialogs).find(dialog => {
+          const text = dialog.textContent.toLowerCase();
+          return text.includes('share') || text.includes('copy link') || text.includes('get link');
+        });
+        
+        if (shareDialog) {
+          log('🎯 Found share dialog with relevant content');
+          dialogFound = true; // Set flag to stop further checking
+          
+          // Process the share dialog
+          setTimeout(() => {
+            analyzeDialogButtons(shareDialog);
+          }, 200); // Small delay to ensure dialog is fully rendered
+          
+          return;
         }
-        resetDialogState();
+        
+        // If we found dialogs but none with share content, try a more lenient check
+        if (dialogs.length > 0) {
+          log('🎯 Found dialog(s) but no share content detected, processing first dialog');
+          dialogFound = true; // Set flag to stop further checking
+          
+          setTimeout(() => {
+            analyzeDialogButtons(dialogs[0]);
+          }, 200);
+          
+          return;
+        }
+      }
+      
+      // Continue checking if not found and haven't exceeded max attempts
+      if (attempts < maxAttempts) {
+        setTimeout(checkForDialog, 100);
+      } else {
+        log('⚠️ Share dialog not found after', maxAttempts, 'attempts');
       }
     };
     
-    // Check visibility periodically
-    const visibilityChecker = setInterval(() => {
-      checkDialogVisibility();
-      
-      // Stop checking after 2 minutes
-      setTimeout(() => {
-        clearInterval(visibilityChecker);
-      }, 120000);
-    }, 2000);
-    
-    // FIX: Add helper function to reset dialog-related state
-    function resetDialogState() {
-      // Clear throttling cache to allow fresh detection
-      state.loggedElements.clear();
-      state.shareDialogFound = false;
-      state.slideUrlButtonInjected = false;
-      
-      log('🔄 Dialog state reset for fresh detection');
-    }
+    // Start checking
+    setTimeout(checkForDialog, 100); // Small initial delay
   }
-  
+
   // Start initialization
   earlyInit();
   
