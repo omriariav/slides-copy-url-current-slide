@@ -1,0 +1,280 @@
+# Cursor Rules for Google Slides Extension Project
+
+## Project Context
+This is a Chrome extension that adds a "Copy current slide link" button to Google Slides share dialogs using overlay positioning and event-driven architecture.
+
+## Core Principles
+
+### 1. Architecture Patterns
+- **Always prefer event-driven architecture over periodic scanning**
+- **Use overlay positioning instead of direct DOM injection**
+- **Implement progressive enhancement with fallbacks**
+- **Apply defensive programming with graceful degradation**
+
+### 2. Performance Guidelines
+- **Avoid setInterval for DOM monitoring - use event listeners instead**
+- **Implement throttling for frequently called functions**
+- **Use debouncing for UI repositioning operations**
+- **Prefer targeted DOM queries over broad searches**
+
+### 3. State Management
+- **Use a centralized state object for all extension state**
+- **Implement simple flags to prevent concurrent operations**
+- **Always reset state flags in cleanup functions**
+- **Keep state minimal - only store what's necessary**
+
+## Coding Standards
+
+### Function Naming Conventions
+- **Action functions:** `injectButton()`, `positionOverlay()`
+- **Query functions:** `getCurrentSlideId()`, `buildUrl()`  
+- **Setup functions:** `setupDetection()`, `setupHandlers()`
+- **Handler functions:** `createClickHandler()`, `handleDismiss()`
+- **Utility functions:** `throttleLog()`, `debounce()`
+
+### Variable Naming
+- **Use descriptive names:** `overlayButton` not `btn`
+- **Boolean flags:** `isInjecting`, `dialogFound`, `isReady`
+- **DOM elements:** `copyLinkButton`, `shareDialog`, `overlayButton`
+- **Timers:** `repositionTimer`, `cleanupTimer`
+
+### CSS Conventions
+- **Use high specificity selectors:** `#element-id:hover` over `.class:hover`
+- **Apply `!important` strategically for third-party site integration**
+- **Follow Google Material Design patterns:**
+  - Border radius: `24px` for pill buttons
+  - Font family: `'Google Sans', Roboto, Arial, sans-serif`
+  - Google blue: `#1a73e8`
+  - Hover background: `rgba(11, 87, 208, 0.09)`
+
+## Code Patterns
+
+### Event-Driven Detection
+```javascript
+// Preferred pattern
+document.addEventListener('click', (event) => {
+  if (isTargetElement(event.target)) {
+    handleEvent();
+  }
+}, true); // Use capture phase
+
+// Avoid periodic scanning
+// setInterval(() => { /* check DOM */ }, 1000); // ❌
+```
+
+### State Management Pattern
+```javascript
+// Always check flags before operations
+function performAction() {
+  if (state.isProcessing) {
+    log('Operation in progress, skipping...');
+    return;
+  }
+  
+  state.isProcessing = true;
+  try {
+    // ... operation logic
+  } finally {
+    state.isProcessing = false;
+  }
+}
+```
+
+### Cleanup Pattern
+```javascript
+// Every injection should include cleanup
+function injectElement() {
+  // Remove existing elements first
+  const existing = document.querySelectorAll('.target-selector');
+  existing.forEach(el => el.remove());
+  
+  // Create new element
+  const element = createElement();
+  
+  // Setup cleanup handlers
+  const cleanup = () => {
+    element.remove();
+    removeEventListeners();
+    resetState();
+  };
+  
+  // Register cleanup triggers
+  element.addEventListener('dismiss', cleanup);
+  setupDialogCloseDetection(cleanup);
+}
+```
+
+### Error Handling Pattern
+```javascript
+// Always include try-catch with fallbacks
+try {
+  const result = performPrimaryOperation();
+  handleSuccess(result);
+} catch (error) {
+  log('❌ Primary operation failed:', error);
+  try {
+    const fallback = performFallbackOperation();
+    handleSuccess(fallback);
+  } catch (fallbackError) {
+    log('❌ Fallback also failed:', fallbackError);
+    handleGracefulFailure();
+  }
+}
+```
+
+## DOM Manipulation Guidelines
+
+### Element Creation
+- **Always set proper ARIA attributes for accessibility**
+- **Use semantic HTML attributes (role, aria-label)**
+- **Apply consistent styling patterns**
+- **Include data attributes for testing**
+
+### Positioning Strategy
+```javascript
+// Overlay positioning pattern
+function positionOverlay(element, reference) {
+  const rect = reference.getBoundingClientRect();
+  element.style.cssText = `
+    position: fixed !important;
+    z-index: 999999 !important;
+    left: ${rect.right + 8}px;
+    top: ${rect.top}px;
+  `;
+  
+  // Always verify viewport bounds
+  verifyViewportPosition(element);
+}
+```
+
+### Button Width Consistency
+```javascript
+// Use innerHTML with &nbsp; for consistent width
+textSpan.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;Copied!&nbsp;&nbsp;&nbsp;&nbsp;';
+
+// Avoid textContent for spacing
+// textSpan.textContent = '    Copied!    '; // ❌
+```
+
+## Logging Guidelines
+
+### Conditional Logging
+```javascript
+const DEBUG = true;
+const VERBOSE_LOGGING = false;
+const log = (...args) => DEBUG && console.log('[ProjectName]', ...args);
+const verboseLog = (...args) => VERBOSE_LOGGING && console.log('[ProjectName-VERBOSE]', ...args);
+```
+
+### Log Message Format
+- **Use emoji prefixes:** `🎯`, `✅`, `❌`, `⚠️`, `🔍`
+- **Include context:** Operation name, element info, state
+- **Keep messages concise but informative**
+- **Use consistent prefixes for filtering**
+
+### Throttled Logging
+```javascript
+// Prevent log spam with throttling
+function throttleLog(key, func, delay = 2000) {
+  const now = Date.now();
+  const lastTime = state.loggedElements.get(key) || 0;
+  
+  if ((now - lastTime) > delay) {
+    state.loggedElements.set(key, now);
+    func();
+  }
+}
+```
+
+## Browser Extension Specific
+
+### Content Script Patterns
+- **Detect iframe context early:** `window.self !== window.top`
+- **Use URL patterns for frame detection**
+- **Implement message passing for cross-frame communication**
+- **Handle different injection contexts appropriately**
+
+### Third-Party Site Integration
+- **Assume DOM can change at any time**
+- **Use defensive selectors with fallbacks**
+- **Avoid relying on specific class names or IDs**
+- **Test positioning across different viewport sizes**
+
+## Testing Guidelines
+
+### Manual Testing Shortcuts
+```javascript
+// Include keyboard shortcuts for testing
+document.addEventListener('keydown', (event) => {
+  if (event.ctrlKey && event.shiftKey && event.key === 'T') {
+    event.preventDefault();
+    manualTrigger();
+  }
+});
+```
+
+### Debugging Helpers
+- **Create element inspection utilities**
+- **Log element attributes for debugging**
+- **Include viewport and positioning information**
+- **Track state changes with timestamps**
+
+## Security Considerations
+
+### Content Security Policy
+- **Avoid inline event handlers**
+- **Use addEventListener instead of onclick**
+- **Be cautious with innerHTML - prefer textContent when possible**
+- **Sanitize any user-provided content**
+
+### Google Sites Integration
+- **Expect Google's security measures to remove injected elements**
+- **Use overlay positioning to avoid sanitization**
+- **Don't rely on modifying Google's DOM structure**
+- **Respect Google's UI patterns and styling**
+
+## Comments and Documentation
+
+### Code Comments
+- **Explain "why" not "what"**
+- **Document any workarounds or browser-specific code**
+- **Mark TODO items clearly**
+- **Include performance notes for critical sections**
+
+### Function Documentation
+```javascript
+/**
+ * Brief description of function purpose
+ * @param {Type} param - Description
+ * @returns {Type} Description
+ * @throws {Error} When specific condition occurs
+ */
+```
+
+## File Organization
+
+### Single File Structure (for content scripts)
+1. **Constants and configuration**
+2. **State management**
+3. **Utility functions**
+4. **Core functionality**
+5. **UI creation and positioning**
+6. **Event handlers**
+7. **Initialization**
+
+### Keep Related Functions Together
+- **Group by responsibility, not alphabetically**
+- **Place utility functions near usage**
+- **Keep setup and cleanup functions adjacent**
+
+## Performance Targets
+
+- **Minimize DOM queries - cache elements when possible**
+- **Debounce UI operations to max 10fps (100ms intervals)**
+- **Throttle logging to prevent console spam**
+- **Clean up event listeners and timers**
+- **Avoid memory leaks with proper cleanup**
+
+---
+
+*Follow these rules to maintain consistency with the project's established patterns and ensure optimal performance for browser extension development.* 
