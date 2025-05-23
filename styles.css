@@ -1,0 +1,140 @@
+.copy-slide-url-container {
+  margin-top: 16px;
+  padding: 12px;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Force proper containment for the injected elements */
+.IRwzcb .copy-slide-url-container,
+[role="dialog"] .copy-slide-url-container {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.copy-slide-url-button {
+  background-color: transparent;
+  border: 1px solid #dadce0;
+  border-radius: 24px;
+  padding: 8px 16px;
+  font-family: "Google Sans", Roboto, sans-serif;
+  font-size: 14px;
+  color: #1a73e8;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  align-self: flex-start;
+  outline: none;
+}
+
+.copy-slide-url-button:hover {
+  background-color: #e8f0fe;
+}
+
+.copy-slide-url-button:focus {
+  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.4);
+}
+
+.mode-selector-container,
+.slide-input-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.mode-label,
+.slide-label {
+  font-family: Roboto, sans-serif;
+  font-size: 14px;
+  color: #5f6368;
+  min-width: 100px;
+}
+
+.url-mode-selector {
+  padding: 4px 8px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  background-color: white;
+  font-family: Roboto, sans-serif;
+  font-size: 14px;
+  color: #202124;
+  flex-grow: 1;
+  max-width: 200px;
+}
+
+.slide-number-input {
+  padding: 4px 8px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  width: 80px;
+  font-family: Roboto, sans-serif;
+  font-size: 14px;
+  color: #202124;
+}
+
+.copy-status-message {
+  font-family: Roboto, sans-serif;
+  font-size: 14px;
+  height: 20px;
+  transition: opacity 0.3s;
+  padding: 4px 0;
+}
+
+.copy-status-message.success {
+  color: #1e8e3e;
+}
+
+.copy-status-message.error {
+  color: #d93025;
+}
+
+/* Additional rules for ensuring consistent appearance */
+.copy-slide-url-button,
+.url-mode-selector,
+.slide-number-input {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Ensure RTL language support */
+html[dir="rtl"] .copy-slide-url-button {
+  align-self: flex-end;
+}
+
+/* Dark mode support if Google Slides adds it */
+@media (prefers-color-scheme: dark) {
+  .docs-material-gm-dialog .copy-slide-url-button {
+    border-color: #5f6368;
+    color: #8ab4f8;
+  }
+  
+  .docs-material-gm-dialog .copy-slide-url-button:hover {
+    background-color: rgba(138, 180, 248, 0.08);
+  }
+  
+  .docs-material-gm-dialog .mode-label,
+  .docs-material-gm-dialog .slide-label {
+    color: #9aa0a6;
+  }
+  
+  .docs-material-gm-dialog .url-mode-selector,
+  .docs-material-gm-dialog .slide-number-input {
+    background-color: #202124;
+    border-color: #5f6368;
+    color: #e8eaed;
+  }
+  
+  .docs-material-gm-dialog .copy-status-message.success {
+    color: #81c995;
+  }
+  
+  .docs-material-gm-dialog .copy-status-message.error {
+    color: #f28b82;
+  }
+} 
