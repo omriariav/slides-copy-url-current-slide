@@ -1256,6 +1256,9 @@
         await navigator.clipboard.writeText(url);
         updateButtonState(button, 'success');
         
+        // Show Google-style "Link copied" tooltip
+        showLinkCopiedTooltip();
+        
         log('✅ Slide URL copied successfully:', url);
         
       } catch (error) {
@@ -1708,16 +1711,74 @@
         
         log('✅ Current slide URL copied successfully from quick actions:', url);
         
-        // Close the menu immediately after successful copy
-        const menu = document.querySelector('.goog-menu.scb-sqa-menu.goog-menu.scb-sqa-menu-vertical[role="menu"]');
-        if (menu) {
-          menu.style.visibility = 'hidden';
-        }
+        // Show Google-style "Link copied" tooltip
+        showLinkCopiedTooltip();
+        
+        // Let Google handle menu closing naturally instead of forcing it
+        // This prevents interference with Google's internal state management
         
       } catch (error) {
         log('❌ Error copying current slide URL from quick actions:', error);
       }
     };
+  }
+
+  /**
+   * Show Google-style black tooltip with "Link copied" message
+   */
+  function showLinkCopiedTooltip() {
+    // Remove any existing tooltip first
+    const existingTooltip = document.getElementById('slide-url-copied-tooltip');
+    if (existingTooltip) {
+      existingTooltip.remove();
+    }
+    
+    // Create the tooltip element
+    const tooltip = document.createElement('div');
+    tooltip.id = 'slide-url-copied-tooltip';
+    tooltip.textContent = 'Link copied';
+    
+    // Apply Google-style tooltip styling
+    tooltip.style.cssText = `
+      position: fixed !important;
+      top: 20px !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      background: #202124 !important;
+      color: #ffffff !important;
+      font-family: 'Google Sans', Roboto, Arial, sans-serif !important;
+      font-size: 14px !important;
+      font-weight: 400 !important;
+      line-height: 1.4 !important;
+      padding: 15px !important;
+      border-radius: 5px !important;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24) !important;
+      z-index: 10000000 !important;
+      pointer-events: none !important;
+      opacity: 0 !important;
+      transition: opacity 0.15s ease-in-out !important;
+      white-space: nowrap !important;
+    `;
+    
+    // Add to page
+    document.body.appendChild(tooltip);
+    
+    // Fade in
+    setTimeout(() => {
+      tooltip.style.opacity = '1';
+    }, 10);
+    
+    // Fade out and remove after 2 seconds
+    setTimeout(() => {
+      tooltip.style.opacity = '0';
+      setTimeout(() => {
+        if (tooltip.parentNode) {
+          tooltip.remove();
+        }
+      }, 200); // Wait for fade out animation
+    }, 2000);
+    
+    log('📢 Showed "Link copied" tooltip');
   }
 
   // Start initialization
