@@ -35,21 +35,6 @@ Install directly from the Chrome Web Store:
 4. Click "Load unpacked" and select the extension folder
 5. The extension is now active!
 
-## 📖 How to Use
-
-### Method 1: Quick Actions Menu (Easiest!)
-1. **Open any Google Slides presentation**
-2. **Click the small arrow** next to the "Share" button in the top-right corner
-3. **Click "Copy current slide link"** from the dropdown menu
-4. **See the "Link copied" tooltip** - Google-style confirmation appears
-
-### Method 2: Share Dialog
-1. **Open any Google Slides presentation**
-2. **Click the "Share" button** in the top-right corner
-3. **Look for the "Copy current slide link" button** - it appears next to Google's "Copy link" button
-4. **Click the button** to instantly copy the current slide's URL to your clipboard
-5. **See the confirmation** - button briefly shows "Copied!" to confirm success
-
 ## 📊 Browser Compatibility
 - **Chrome**: ✅ Fully supported (Manifest V3)
 - **Edge**: ✅ Should work (Chromium-based)
