@@ -1,8 +1,18 @@
 # Google Slides Current Slide Link Extension
 
-A Chrome extension that seamlessly adds a "Copy current slide link" button to Google Slides share dialogs, allowing you to quickly share direct links to the current slide.
+A Chrome extension that seamlessly adds a "Copy current slide link" button to Google Slides, providing **two convenient ways** to quickly share direct links to the current slide.
 
-![Extension in action](screenshot.png)
+## 🎯 Two Ways to Copy Current Slide Links
+
+### 1. Quick Actions Menu (NEW!)
+<img src="screenshot2.png" alt="Quick Actions Menu Integration" width="400">
+
+Access "Copy current slide link" directly from Google's native quick sharing menu (arrow next to Share button).
+
+### 2. Share Dialog Integration  
+<img src="screenshot.png" alt="Share Dialog Integration" width="400">
+
+Find the button positioned next to Google's "Copy link" button in share dialogs.
 
 ## ⚠️ Disclaimer
 
@@ -12,16 +22,21 @@ A Chrome extension that seamlessly adds a "Copy current slide link" button to Go
 
 ## ✨ Features
 
-- **🎯 One-click slide sharing**: Copy direct links to specific slides instantly
+- **🎯 Two convenient access methods**: Quick actions menu + share dialog integration
+- **📱 Google-native experience**: Authentic styling with "Link copied" tooltip  
 - **🔗 Smart URL generation**: Automatically detects current slide and creates proper URLs
-- **📱 Native integration**: Perfectly matches Google's Material Design UI
 - **⚡ Event-driven performance**: Efficient background processing with minimal resource usage
-- **🛡️ Robust overlay positioning**: Works reliably across different screen sizes and dialog states
-- **✅ Visual feedback**: Clear confirmation when URL is copied to clipboard
+- **🛡️ Robust integration**: Respects Google's UI architecture for reliable operation
+- **✅ Visual feedback**: Google-style confirmation tooltip when URL is copied
 
 ## 🚀 Installation
 
-### Option 1: Load Unpacked (Development)
+### Option 1: Chrome Web Store (Recommended)
+Install directly from the Chrome Web Store:
+
+**[📥 Install from Chrome Web Store](https://chromewebstore.google.com/detail/google-slides-current-sli/iifbobbbmgboednjjnlegdbpgdgpldfl)**
+
+### Option 2: Load Unpacked (Development)
 1. Download or clone this repository:
    ```bash
    git clone https://github.com/yourusername/google-slides-current-slide-link.git
@@ -31,11 +46,15 @@ A Chrome extension that seamlessly adds a "Copy current slide link" button to Go
 4. Click "Load unpacked" and select the extension folder
 5. The extension is now active!
 
-### Option 2: Chrome Web Store
-*Coming soon - extension will be published to the Chrome Web Store*
-
 ## 📖 How to Use
 
+### Method 1: Quick Actions Menu (Easiest!)
+1. **Open any Google Slides presentation**
+2. **Click the small arrow** next to the "Share" button in the top-right corner
+3. **Click "Copy current slide link"** from the dropdown menu
+4. **See the "Link copied" tooltip** - Google-style confirmation appears
+
+### Method 2: Share Dialog
 1. **Open any Google Slides presentation**
 2. **Click the "Share" button** in the top-right corner
 3. **Look for the "Copy current slide link" button** - it appears next to Google's "Copy link" button
@@ -69,17 +88,16 @@ https://docs.google.com/presentation/d/[PRESENTATION_ID]/edit#slide=id.[SLIDE_ID
 - **`manifest.json`**: Chrome Extension Manifest V3 configuration
 
 ## 🧠 Architecture Insights
-### Why Overlay Positioning?
-- **Google's security**: Prevents direct DOM modifications
-- **Reliability**: Immune to Google's UI updates
-- **Performance**: No conflicts with Google's scripts
+### Why Two Integration Methods?
+- **Quick Actions**: Native Google menu integration for seamless UX
+- **Share Dialog**: Overlay positioning for broader compatibility
 
 ### State Management
 ```javascript
 // Simple flag-based state management
 const state = {
   isInjecting: false,
-  dialogFound: false,
+  quickActionsInjected: false,
   loggedElements: new Map()
 };
 ```
