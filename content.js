@@ -3,9 +3,28 @@
 
 (() => {
   const DEBUG = true;
+  const PRODUCTION = false; // Set to true before uploading to Chrome Store
   const VERBOSE_LOGGING = false; // Set to true for detailed logging
-  const log = (...args) => DEBUG && console.log('[SlideURLCopier]', ...args);
-  const verboseLog = (...args) => VERBOSE_LOGGING && console.log('[SlideURLCopier-VERBOSE]', ...args);
+  
+  // Production-aware logging
+  const log = (...args) => {
+    if (PRODUCTION) {
+      // In production: only log errors and critical functionality
+      const message = args.join(' ');
+      if (message.includes('❌') || message.includes('Error') || message.includes('✅ Current slide URL copied')) {
+        console.log('[SlideURLCopier]', ...args);
+      }
+    } else if (DEBUG) {
+      // In development: log everything
+      console.log('[SlideURLCopier]', ...args);
+    }
+  };
+  
+  const verboseLog = (...args) => {
+    if (!PRODUCTION && VERBOSE_LOGGING) {
+      console.log('[SlideURLCopier-VERBOSE]', ...args);
+    }
+  };
   
   // Extension configuration
   const CONFIG = {
@@ -29,7 +48,9 @@
     frameType: 'unknown',
     lastLogTime: 0,
     loggedElements: new Map(), // For timestamp tracking to prevent log spam
-    isInjecting: false // Flag to prevent concurrent injections
+    isInjecting: false, // Flag to prevent concurrent injections
+    quickActionsInjected: false, // Flag to prevent re-injection of quick actions option
+    fallbackCheckDone: false // Flag to ensure fallback check is only done once
   };
   
   // Throttling function to prevent log spam
@@ -120,19 +141,21 @@
       // Set up quick actions menu detection - NEW FEATURE
       setupQuickActionsMenuDetection();
       
-      // Immediately scan for existing dialogs
-      verboseLog('🔍 IMMEDIATE SCAN - Checking for existing dialogs in', state.frameType);
-      const existingDialogs = document.querySelectorAll('[role="dialog"], [role="alertdialog"], .docs-dialog, .modal');
-      if (existingDialogs.length > 0) {
-        log('Found existing dialogs:', existingDialogs.length);
-        // Only log first dialog to avoid spam
-        if (existingDialogs[0]) {
-          logDialogElement('🎯 EXISTING DIALOG (immediate)', existingDialogs[0], 'immediate scan');
-        }
-      }
-      
       // Immediately scan for existing quick actions menus and inject our option
       scanForExistingQuickActionsMenu();
+      
+      // Immediately scan for existing dialogs
+      if (!PRODUCTION) {
+        verboseLog('🔍 IMMEDIATE SCAN - Checking for existing dialogs in', state.frameType);
+        const existingDialogs = document.querySelectorAll('[role="dialog"], [role="alertdialog"], .docs-dialog, .modal');
+        if (existingDialogs.length > 0) {
+          log('Found existing dialogs:', existingDialogs.length);
+          // Only log first dialog to avoid spam
+          if (existingDialogs[0]) {
+            logDialogElement('🎯 EXISTING DIALOG (immediate)', existingDialogs[0], 'immediate scan');
+          }
+        }
+      }
     }
     
     // Different initialization based on frame type
@@ -1438,8 +1461,35 @@
           id: quickActionsButton.id
         });
         
-        // Wait for the quick actions menu to appear
-        waitForQuickActionsMenu();
+        // Update current slide ID for when user clicks our option
+        const newSlideId = getCurrentSlideId();
+        if (newSlideId !== state.currentSlideId) {
+          state.currentSlideId = newSlideId;
+          log('📍 Updated current slide ID to:', newSlideId);
+        }
+        
+        // One-time fallback check: if option not injected and we haven't checked before
+        if (!state.quickActionsInjected && !state.fallbackCheckDone) {
+          log('🔧 Fallback check: option not injected, attempting injection...');
+          state.fallbackCheckDone = true; // Mark that we've done the fallback check
+          waitForQuickActionsMenu();
+        } else if (state.quickActionsInjected && !state.fallbackCheckDone) {
+          // Option was injected but let's verify it's actually in the DOM (one-time check)
+          setTimeout(() => {
+            const menu = document.querySelector('.goog-menu.scb-sqa-menu.goog-menu.scb-sqa-menu-vertical[role="menu"]');
+            if (menu && menu.style.visibility === 'visible') {
+              const existingOption = menu.querySelector('#current-slide-copy-option');
+              if (!existingOption) {
+                log('🔧 Fallback check: option missing from DOM, re-injecting...');
+                state.quickActionsInjected = false; // Reset flag to allow re-injection
+                injectCurrentSlideOption(menu);
+              } else {
+                log('✅ Fallback check: option confirmed in DOM');
+              }
+            }
+            state.fallbackCheckDone = true; // Mark that we've done the fallback check
+          }, 100);
+        }
       }
     }, true); // Use capture phase to catch the event early
     
@@ -1451,6 +1501,10 @@
    */
   function scanForExistingQuickActionsMenu() {
     log('🔍 Scanning for existing quick actions menu...');
+    
+    // Initialize current slide ID
+    state.currentSlideId = getCurrentSlideId();
+    log('📍 Initialized current slide ID to:', state.currentSlideId);
     
     // Look for the quick actions menu that might already exist
     const menu = document.querySelector('.goog-menu.scb-sqa-menu.goog-menu.scb-sqa-menu-vertical[role="menu"]');
@@ -1524,6 +1578,12 @@
   function injectCurrentSlideOption(menu) {
     log('🚀 Injecting current slide option into quick actions menu...');
     
+    // Check if we've already injected
+    if (state.quickActionsInjected) {
+      log('ℹ️ Quick actions option already injected, skipping...');
+      return;
+    }
+    
     // Find the "Copy link" menu item
     const menuItems = menu.querySelectorAll('.goog-menuitem.scb-sqa-menuitem[role="menuitem"]');
     let copyLinkItem = null;
@@ -1543,10 +1603,11 @@
     
     log('✅ Found "Copy link" menu item, creating current slide option...');
     
-    // Check if our option already exists
+    // Check if our option already exists (double-check)
     const existingOption = menu.querySelector('#current-slide-copy-option');
     if (existingOption) {
-      log('ℹ️ Current slide option already exists, skipping injection');
+      log('ℹ️ Current slide option already exists in DOM, marking as injected');
+      state.quickActionsInjected = true;
       return;
     }
     
@@ -1556,7 +1617,10 @@
     // Insert after the "Copy link" item
     copyLinkItem.insertAdjacentElement('afterend', currentSlideItem);
     
-    log('✅ Current slide option injected successfully');
+    // Mark as injected
+    state.quickActionsInjected = true;
+    
+    log('✅ Current slide option injected successfully - will not inject again');
   }
 
   /**
@@ -1629,10 +1693,6 @@
       
       log('🔗 Quick actions copy current slide button clicked!');
       
-      // Update UI to show copying
-      const originalText = textElement.textContent;
-      textElement.textContent = 'Copying...';
-      
       try {
         let url;
         
@@ -1646,15 +1706,7 @@
         
         await navigator.clipboard.writeText(url);
         
-        // Show success state
-        textElement.textContent = 'Copied!';
-        
         log('✅ Current slide URL copied successfully from quick actions:', url);
-        
-        // Reset text after delay
-        setTimeout(() => {
-          textElement.textContent = originalText;
-        }, 1000);
         
         // Close the menu after successful copy
         setTimeout(() => {
@@ -1662,16 +1714,10 @@
           if (menu) {
             menu.style.visibility = 'hidden';
           }
-        }, 1000);
+        }, 500); // Reduced delay since no text animation
         
       } catch (error) {
         log('❌ Error copying current slide URL from quick actions:', error);
-        textElement.textContent = 'Copy failed';
-        
-        // Reset text after delay
-        setTimeout(() => {
-          textElement.textContent = originalText;
-        }, 1000);
       }
     };
   }
