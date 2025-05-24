@@ -117,6 +117,9 @@
     if (DEBUG) {
       setupShareButtonClickDetection();
       
+      // Set up quick actions menu detection - NEW FEATURE
+      setupQuickActionsMenuDetection();
+      
       // Immediately scan for existing dialogs
       verboseLog('🔍 IMMEDIATE SCAN - Checking for existing dialogs in', state.frameType);
       const existingDialogs = document.querySelectorAll('[role="dialog"], [role="alertdialog"], .docs-dialog, .modal');
@@ -127,6 +130,9 @@
           logDialogElement('🎯 EXISTING DIALOG (immediate)', existingDialogs[0], 'immediate scan');
         }
       }
+      
+      // Immediately scan for existing quick actions menus and inject our option
+      scanForExistingQuickActionsMenu();
     }
     
     // Different initialization based on frame type
@@ -1412,16 +1418,264 @@
     setTimeout(checkForDialog, 100); // Small initial delay
   }
 
+  /**
+   * Set up quick actions menu detection - NEW FEATURE
+   */
+  function setupQuickActionsMenuDetection() {
+    log('🎯 Setting up quick actions menu detection...');
+    
+    // Listen for clicks on the quick actions menu button
+    document.addEventListener('click', (event) => {
+      const target = event.target;
+      
+      // Check if clicked element is the quick actions menu button or its parent
+      const quickActionsButton = target.closest('#scb-quick-actions-menu-button') || 
+                                 (target.id === 'scb-quick-actions-menu-button' ? target : null);
+      
+      if (quickActionsButton) {
+        log('🎯 QUICK ACTIONS MENU BUTTON CLICKED!', {
+          element: quickActionsButton,
+          id: quickActionsButton.id
+        });
+        
+        // Wait for the quick actions menu to appear
+        waitForQuickActionsMenu();
+      }
+    }, true); // Use capture phase to catch the event early
+    
+    log('✅ Quick actions menu detection set up');
+  }
+
+  /**
+   * Scan for existing quick actions menu and inject our option immediately
+   */
+  function scanForExistingQuickActionsMenu() {
+    log('🔍 Scanning for existing quick actions menu...');
+    
+    // Look for the quick actions menu that might already exist
+    const menu = document.querySelector('.goog-menu.scb-sqa-menu.goog-menu.scb-sqa-menu-vertical[role="menu"]');
+    
+    if (menu) {
+      log('✅ Found existing quick actions menu, injecting option immediately...');
+      injectCurrentSlideOption(menu);
+    } else {
+      log('ℹ️ No existing quick actions menu found, will try again after delay...');
+      
+      // Try again after a short delay in case the menu loads shortly after document ready
+      setTimeout(() => {
+        const delayedMenu = document.querySelector('.goog-menu.scb-sqa-menu.goog-menu.scb-sqa-menu-vertical[role="menu"]');
+        if (delayedMenu) {
+          log('✅ Found quick actions menu after delay, injecting option...');
+          injectCurrentSlideOption(delayedMenu);
+        } else {
+          log('ℹ️ Still no quick actions menu found, will inject when user clicks');
+        }
+      }, 1000); // Try again after 1 second
+    }
+  }
+
+  /**
+   * Wait for quick actions menu to appear and inject our option
+   */
+  function waitForQuickActionsMenu() {
+    log('⏳ Waiting for quick actions menu to appear...');
+    
+    let attempts = 0;
+    let menuFound = false;
+    const maxAttempts = 20; // Check for 2 seconds
+    
+    const checkForMenu = () => {
+      if (menuFound) {
+        return;
+      }
+      
+      attempts++;
+      
+      // Look for the quick actions menu
+      const menu = document.querySelector('.goog-menu.scb-sqa-menu.goog-menu.scb-sqa-menu-vertical[role="menu"]');
+      
+      if (menu && menu.style.visibility === 'visible') {
+        log('✅ Quick actions menu detected!');
+        menuFound = true;
+        
+        // Process the menu to inject our option
+        setTimeout(() => {
+          injectCurrentSlideOption(menu);
+        }, 100); // Small delay to ensure menu is fully rendered
+        
+        return;
+      }
+      
+      // Continue checking if not found and haven't exceeded max attempts
+      if (attempts < maxAttempts) {
+        setTimeout(checkForMenu, 100);
+      } else {
+        log('⚠️ Quick actions menu not found after', maxAttempts, 'attempts');
+      }
+    };
+    
+    // Start checking
+    setTimeout(checkForMenu, 50); // Small initial delay
+  }
+
+  /**
+   * Inject "Copy current slide link" option into quick actions menu
+   */
+  function injectCurrentSlideOption(menu) {
+    log('🚀 Injecting current slide option into quick actions menu...');
+    
+    // Find the "Copy link" menu item
+    const menuItems = menu.querySelectorAll('.goog-menuitem.scb-sqa-menuitem[role="menuitem"]');
+    let copyLinkItem = null;
+    
+    for (const item of menuItems) {
+      const text = item.textContent.toLowerCase();
+      if (text.includes('copy link') && !text.includes('time')) {
+        copyLinkItem = item;
+        break;
+      }
+    }
+    
+    if (!copyLinkItem) {
+      log('❌ Could not find "Copy link" menu item');
+      return;
+    }
+    
+    log('✅ Found "Copy link" menu item, creating current slide option...');
+    
+    // Check if our option already exists
+    const existingOption = menu.querySelector('#current-slide-copy-option');
+    if (existingOption) {
+      log('ℹ️ Current slide option already exists, skipping injection');
+      return;
+    }
+    
+    // Create new menu item for current slide
+    const currentSlideItem = createQuickActionsMenuItem();
+    
+    // Insert after the "Copy link" item
+    copyLinkItem.insertAdjacentElement('afterend', currentSlideItem);
+    
+    log('✅ Current slide option injected successfully');
+  }
+
+  /**
+   * Create the "Copy current slide link" menu item for quick actions
+   */
+  function createQuickActionsMenuItem() {
+    // Create the main menu item container
+    const menuItem = document.createElement('div');
+    menuItem.className = 'goog-menuitem scb-sqa-menuitem';
+    menuItem.setAttribute('role', 'menuitem');
+    menuItem.setAttribute('aria-disabled', 'false');
+    menuItem.id = 'current-slide-copy-option';
+    menuItem.style.userSelect = 'none';
+    
+    // Create menu item content
+    const content = document.createElement('div');
+    content.className = 'goog-menuitem-content';
+    content.style.userSelect = 'none';
+    
+    // Create inner content structure
+    const innerContent = document.createElement('div');
+    innerContent.className = 'scb-sqa-menuitem-content apps-menuitem';
+    innerContent.style.userSelect = 'none';
+    
+    // Create text element
+    const textDiv = document.createElement('div');
+    textDiv.style.userSelect = 'none';
+    textDiv.textContent = 'Copy current slide link';
+    
+    // Create icon container
+    const iconContainer = document.createElement('div');
+    iconContainer.className = 'goog-menuitem-icon scb-sqa-copy-link-icon-container';
+    iconContainer.style.userSelect = 'none';
+    
+    // Create icon
+    const icon = document.createElement('div');
+    icon.className = 'scb-sqa-sprite apps-share-sprite scb-sqa-copy-link-icon';
+    icon.style.userSelect = 'none';
+    icon.innerHTML = '&nbsp;';
+    
+    // Assemble the structure
+    iconContainer.appendChild(icon);
+    innerContent.appendChild(textDiv);
+    innerContent.appendChild(iconContainer);
+    content.appendChild(innerContent);
+    menuItem.appendChild(content);
+    
+    // Add click handler
+    menuItem.addEventListener('click', createQuickActionsClickHandler(textDiv));
+    
+    // Add hover effects
+    menuItem.addEventListener('mouseenter', () => {
+      menuItem.classList.add('goog-menuitem-highlight');
+    });
+    
+    menuItem.addEventListener('mouseleave', () => {
+      menuItem.classList.remove('goog-menuitem-highlight');
+    });
+    
+    return menuItem;
+  }
+
+  /**
+   * Create click handler for quick actions menu item
+   */
+  function createQuickActionsClickHandler(textElement) {
+    return async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      
+      log('🔗 Quick actions copy current slide button clicked!');
+      
+      // Update UI to show copying
+      const originalText = textElement.textContent;
+      textElement.textContent = 'Copying...';
+      
+      try {
+        let url;
+        
+        if (state.isShareIframe) {
+          // We're in iframe, need to communicate with main frame
+          url = await requestSlideUrlFromMainFrame();
+        } else {
+          // We're in main frame, can get URL directly
+          url = buildSlideUrl({ mode: 'EDIT' });
+        }
+        
+        await navigator.clipboard.writeText(url);
+        
+        // Show success state
+        textElement.textContent = 'Copied!';
+        
+        log('✅ Current slide URL copied successfully from quick actions:', url);
+        
+        // Reset text after delay
+        setTimeout(() => {
+          textElement.textContent = originalText;
+        }, 1000);
+        
+        // Close the menu after successful copy
+        setTimeout(() => {
+          const menu = document.querySelector('.goog-menu.scb-sqa-menu.goog-menu.scb-sqa-menu-vertical[role="menu"]');
+          if (menu) {
+            menu.style.visibility = 'hidden';
+          }
+        }, 1000);
+        
+      } catch (error) {
+        log('❌ Error copying current slide URL from quick actions:', error);
+        textElement.textContent = 'Copy failed';
+        
+        // Reset text after delay
+        setTimeout(() => {
+          textElement.textContent = originalText;
+        }, 1000);
+      }
+    };
+  }
+
   // Start initialization
   earlyInit();
-  
-  // DEBUG: Add keyboard shortcut to manually inject overlay button
-  document.addEventListener('keydown', (event) => {
-    // Ctrl+Shift+T to inject overlay button manually
-    if (event.ctrlKey && event.shiftKey && event.key === 'T') {
-      event.preventDefault();
-      log('🧪 MANUAL OVERLAY BUTTON INJECTION (Ctrl+Shift+T)');
-      injectTestButton();
-    }
-  });
 })();

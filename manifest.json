@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Google Slides Current Slide URL Copier",
-  "version": "1.1",
+  "version": "1.2",
   "description": "Adds a button to copy the URL for the current slide in Google Slides with enhanced detection",
   "permissions": ["activeTab", "clipboardWrite"],
   "content_scripts": [
