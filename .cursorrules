@@ -1,280 +1,308 @@
 # Cursor Rules for Google Slides Extension Project
 
 ## Project Context
-This is a Chrome extension that adds a "Copy current slide link" button to Google Slides share dialogs using overlay positioning and event-driven architecture.
+This is a Chrome extension that adds a "Copy current slide link" button to Google Slides using **two integration methods**: Quick Actions Menu (native) and Share Dialog (overlay). Features event-driven architecture with Google-style UI elements.
 
 ## Core Principles
 
-### 1. Architecture Patterns
+### 1. Dual Integration Strategy
+- **Quick Actions Menu**: Native Google menu integration for seamless UX
+- **Share Dialog Overlay**: Overlay positioning for broader compatibility
+- **Respect Google's UI**: Never manually manipulate Google's native menu behavior
+- **Progressive Enhancement**: Core functionality works, enhancements add value
+
+### 2. Architecture Patterns
 - **Always prefer event-driven architecture over periodic scanning**
-- **Use overlay positioning instead of direct DOM injection**
-- **Implement progressive enhancement with fallbacks**
+- **Use native integration when possible, overlay as fallback**
+- **Implement one-time injection with smart state management**
 - **Apply defensive programming with graceful degradation**
+- **Let Google handle what Google does best (menu state, closing behavior)**
 
-### 2. Performance Guidelines
+### 3. Performance Guidelines
 - **Avoid setInterval for DOM monitoring - use event listeners instead**
-- **Implement throttling for frequently called functions**
-- **Use debouncing for UI repositioning operations**
+- **Implement one-time injection patterns to prevent duplicate operations**
+- **Use production-aware logging to minimize console noise**
 - **Prefer targeted DOM queries over broad searches**
+- **Cache slide ID updates only when necessary**
 
-### 3. State Management
+### 4. State Management
 - **Use a centralized state object for all extension state**
-- **Implement simple flags to prevent concurrent operations**
-- **Always reset state flags in cleanup functions**
+- **Implement injection flags to prevent duplicate injections**
+- **Track fallback checks to ensure one-time-only operations**
 - **Keep state minimal - only store what's necessary**
+- **Always reset state flags in appropriate cleanup functions**
 
 ## Coding Standards
 
 ### Function Naming Conventions
-- **Action functions:** `injectButton()`, `positionOverlay()`
-- **Query functions:** `getCurrentSlideId()`, `buildUrl()`  
-- **Setup functions:** `setupDetection()`, `setupHandlers()`
-- **Handler functions:** `createClickHandler()`, `handleDismiss()`
-- **Utility functions:** `throttleLog()`, `debounce()`
+- **Action functions:** `injectCurrentSlideOption()`, `showLinkCopiedTooltip()`
+- **Query functions:** `getCurrentSlideId()`, `buildSlideUrl()`  
+- **Setup functions:** `setupQuickActionsMenuDetection()`, `scanForExistingQuickActionsMenu()`
+- **Handler functions:** `createQuickActionsClickHandler()`, `handleMenuClick()`
+- **Utility functions:** `throttleLog()`, `updateSlideId()`
 
 ### Variable Naming
-- **Use descriptive names:** `overlayButton` not `btn`
-- **Boolean flags:** `isInjecting`, `dialogFound`, `isReady`
-- **DOM elements:** `copyLinkButton`, `shareDialog`, `overlayButton`
-- **Timers:** `repositionTimer`, `cleanupTimer`
+- **Use descriptive names:** `quickActionsInjected` not `injected`
+- **Boolean flags:** `isInjecting`, `quickActionsInjected`, `fallbackCheckDone`
+- **DOM elements:** `copyLinkButton`, `quickActionsMenu`, `tooltipElement`
+- **State tracking:** `currentSlideId`, `frameType`, `isShareIframe`
 
 ### CSS Conventions
 - **Use high specificity selectors:** `#element-id:hover` over `.class:hover`
 - **Apply `!important` strategically for third-party site integration**
 - **Follow Google Material Design patterns:**
-  - Border radius: `24px` for pill buttons
+  - Border radius: `5px` for Google-style tooltips, `24px` for pill buttons
   - Font family: `'Google Sans', Roboto, Arial, sans-serif`
   - Google blue: `#1a73e8`
+  - Tooltip styling: `#202124` background, `15px` padding
   - Hover background: `rgba(11, 87, 208, 0.09)`
 
 ## Code Patterns
 
-### Event-Driven Detection
+### Quick Actions Menu Integration
 ```javascript
-// Preferred pattern
-document.addEventListener('click', (event) => {
-  if (isTargetElement(event.target)) {
-    handleEvent();
-  }
-}, true); // Use capture phase
-
-// Avoid periodic scanning
-// setInterval(() => { /* check DOM */ }, 1000); // ❌
+// Preferred: Native menu integration
+function setupQuickActionsMenuDetection() {
+  document.addEventListener('click', (event) => {
+    const quickActionsButton = event.target.closest('#scb-quick-actions-menu-button');
+    if (quickActionsButton) {
+      // Update slide ID when menu is accessed
+      const newSlideId = getCurrentSlideId();
+      if (newSlideId !== state.currentSlideId) {
+        state.currentSlideId = newSlideId;
+      }
+      
+      // Only inject if not already done
+      if (!state.quickActionsInjected && !state.fallbackCheckDone) {
+        waitForQuickActionsMenu();
+      }
+    }
+  }, true);
+}
 ```
 
-### State Management Pattern
+### One-Time Injection Pattern
 ```javascript
-// Always check flags before operations
-function performAction() {
-  if (state.isProcessing) {
-    log('Operation in progress, skipping...');
+// Prevent duplicate injections with state flags
+function injectCurrentSlideOption(menu) {
+  // Check injection flag first
+  if (state.quickActionsInjected) {
     return;
   }
   
-  state.isProcessing = true;
-  try {
-    // ... operation logic
-  } finally {
-    state.isProcessing = false;
+  // Check DOM to be sure
+  const existingOption = menu.querySelector('#current-slide-copy-option');
+  if (existingOption) {
+    state.quickActionsInjected = true;
+    return;
   }
+  
+  // Create and inject
+  const menuItem = createQuickActionsMenuItem();
+  copyLinkItem.insertAdjacentElement('afterend', menuItem);
+  
+  // Mark as completed
+  state.quickActionsInjected = true;
 }
 ```
 
-### Cleanup Pattern
+### Google-Style Tooltip Creation
 ```javascript
-// Every injection should include cleanup
-function injectElement() {
-  // Remove existing elements first
-  const existing = document.querySelectorAll('.target-selector');
-  existing.forEach(el => el.remove());
+// Match Google's exact tooltip styling
+function showLinkCopiedTooltip() {
+  const tooltip = document.createElement('div');
+  tooltip.style.cssText = `
+    position: fixed !important;
+    top: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    background: #202124 !important;
+    color: #ffffff !important;
+    font-size: 14px !important;
+    padding: 15px !important;
+    border-radius: 5px !important;
+    opacity: 0 !important;
+    transition: opacity 0.15s ease-in-out !important;
+  `;
   
-  // Create new element
-  const element = createElement();
-  
-  // Setup cleanup handlers
-  const cleanup = () => {
-    element.remove();
-    removeEventListeners();
-    resetState();
+  // Fade in/out animation
+  document.body.appendChild(tooltip);
+  setTimeout(() => tooltip.style.opacity = '1', 10);
+  setTimeout(() => {
+    tooltip.style.opacity = '0';
+    setTimeout(() => tooltip.remove(), 200);
+  }, 2000);
+}
+```
+
+### Non-Interfering Click Handlers
+```javascript
+// DON'T manually manipulate Google's menu behavior
+function createQuickActionsClickHandler(textElement) {
+  return async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Do our work
+    const url = buildSlideUrl({ mode: 'EDIT' });
+    await navigator.clipboard.writeText(url);
+    showLinkCopiedTooltip();
+    
+    // Let Google handle menu closing naturally
+    // DON'T: menu.style.visibility = 'hidden'
   };
-  
-  // Register cleanup triggers
-  element.addEventListener('dismiss', cleanup);
-  setupDialogCloseDetection(cleanup);
 }
 ```
 
-### Error Handling Pattern
+### Production-Aware Logging
 ```javascript
-// Always include try-catch with fallbacks
-try {
-  const result = performPrimaryOperation();
-  handleSuccess(result);
-} catch (error) {
-  log('❌ Primary operation failed:', error);
-  try {
-    const fallback = performFallbackOperation();
-    handleSuccess(fallback);
-  } catch (fallbackError) {
-    log('❌ Fallback also failed:', fallbackError);
-    handleGracefulFailure();
+// Smart logging for production deployment
+const PRODUCTION = false; // Toggle for Chrome Store
+const log = (...args) => {
+  if (PRODUCTION) {
+    // Only critical logs in production
+    const message = args.join(' ');
+    if (message.includes('❌') || message.includes('Error') || 
+        message.includes('✅ Current slide URL copied')) {
+      console.log('[SlideURLCopier]', ...args);
+    }
+  } else if (DEBUG) {
+    console.log('[SlideURLCopier]', ...args);
   }
+};
+```
+
+### Fallback Check Pattern
+```javascript
+// One-time fallback mechanism
+if (!state.quickActionsInjected && !state.fallbackCheckDone) {
+  // First scenario: Never injected
+  state.fallbackCheckDone = true;
+  waitForQuickActionsMenu();
+} else if (state.quickActionsInjected && !state.fallbackCheckDone) {
+  // Second scenario: Injected but verify DOM
+  setTimeout(() => {
+    const menu = document.querySelector('.goog-menu[role="menu"]');
+    if (menu && !menu.querySelector('#current-slide-copy-option')) {
+      state.quickActionsInjected = false; // Reset for re-injection
+      injectCurrentSlideOption(menu);
+    }
+    state.fallbackCheckDone = true;
+  }, 100);
 }
 ```
 
 ## DOM Manipulation Guidelines
 
-### Element Creation
-- **Always set proper ARIA attributes for accessibility**
-- **Use semantic HTML attributes (role, aria-label)**
-- **Apply consistent styling patterns**
-- **Include data attributes for testing**
+### Native Menu Integration
+- **Find existing menu structure** - Use Google's class patterns
+- **Insert adjacent to similar elements** - `copyLinkItem.insertAdjacentElement('afterend', newItem)`
+- **Match exact HTML structure** - Copy Google's element hierarchy
+- **Use Google's CSS classes** - `goog-menuitem`, `scb-sqa-menuitem`, etc.
+- **Respect menu behavior** - Don't manually show/hide Google's menus
 
-### Positioning Strategy
+### Element Creation for Google Menus
 ```javascript
-// Overlay positioning pattern
-function positionOverlay(element, reference) {
-  const rect = reference.getBoundingClientRect();
-  element.style.cssText = `
-    position: fixed !important;
-    z-index: 999999 !important;
-    left: ${rect.right + 8}px;
-    top: ${rect.top}px;
-  `;
+// Match Google's menu item structure exactly
+const menuItem = document.createElement('div');
+menuItem.className = 'goog-menuitem scb-sqa-menuitem';
+menuItem.setAttribute('role', 'menuitem');
+menuItem.setAttribute('aria-disabled', 'false');
+
+const content = document.createElement('div');
+content.className = 'goog-menuitem-content';
+
+const innerContent = document.createElement('div');
+innerContent.className = 'scb-sqa-menuitem-content apps-menuitem';
+```
+
+### Tooltip Positioning
+```javascript
+// Fixed positioning for consistent placement
+tooltip.style.cssText = `
+  position: fixed !important;
+  top: 20px !important;  // Close to top like Google's
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 10000000 !important;
+`;
+```
+
+## State Management Patterns
+
+### Extended State Object
+```javascript
+const state = {
+  // Original properties
+  isInitialized: false,
+  currentSlideId: null,
+  isReady: false,
+  isInIframe: window.self !== window.top,
+  isShareIframe: false,
+  frameType: 'unknown',
   
-  // Always verify viewport bounds
-  verifyViewportPosition(element);
-}
-```
-
-### Button Width Consistency
-```javascript
-// Use innerHTML with &nbsp; for consistent width
-textSpan.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;Copied!&nbsp;&nbsp;&nbsp;&nbsp;';
-
-// Avoid textContent for spacing
-// textSpan.textContent = '    Copied!    '; // ❌
-```
-
-## Logging Guidelines
-
-### Conditional Logging
-```javascript
-const DEBUG = true;
-const VERBOSE_LOGGING = false;
-const log = (...args) => DEBUG && console.log('[ProjectName]', ...args);
-const verboseLog = (...args) => VERBOSE_LOGGING && console.log('[ProjectName-VERBOSE]', ...args);
-```
-
-### Log Message Format
-- **Use emoji prefixes:** `🎯`, `✅`, `❌`, `⚠️`, `🔍`
-- **Include context:** Operation name, element info, state
-- **Keep messages concise but informative**
-- **Use consistent prefixes for filtering**
-
-### Throttled Logging
-```javascript
-// Prevent log spam with throttling
-function throttleLog(key, func, delay = 2000) {
-  const now = Date.now();
-  const lastTime = state.loggedElements.get(key) || 0;
+  // Quick Actions properties
+  quickActionsInjected: false,
+  fallbackCheckDone: false,
   
-  if ((now - lastTime) > delay) {
-    state.loggedElements.set(key, now);
-    func();
+  // Overlay properties  
+  isInjecting: false,
+  
+  // Utility properties
+  loggedElements: new Map()
+};
+```
+
+### Slide ID Management
+```javascript
+// Update slide ID only when accessing quick actions
+function handleQuickActionsClick() {
+  const newSlideId = getCurrentSlideId();
+  if (newSlideId !== state.currentSlideId) {
+    state.currentSlideId = newSlideId;
+    log('📍 Updated current slide ID to:', newSlideId);
   }
 }
 ```
 
 ## Browser Extension Specific
 
-### Content Script Patterns
-- **Detect iframe context early:** `window.self !== window.top`
-- **Use URL patterns for frame detection**
-- **Implement message passing for cross-frame communication**
-- **Handle different injection contexts appropriately**
+### Dual Integration Approach
+- **Quick Actions**: Seamless native integration
+- **Share Dialog**: Fallback overlay approach
+- **Frame Detection**: Different behavior per frame type
+- **Cross-frame Communication**: Message passing for iframe scenarios
 
-### Third-Party Site Integration
-- **Assume DOM can change at any time**
-- **Use defensive selectors with fallbacks**
-- **Avoid relying on specific class names or IDs**
-- **Test positioning across different viewport sizes**
-
-## Testing Guidelines
-
-### Manual Testing Shortcuts
-```javascript
-// Include keyboard shortcuts for testing
-document.addEventListener('keydown', (event) => {
-  if (event.ctrlKey && event.shiftKey && event.key === 'T') {
-    event.preventDefault();
-    manualTrigger();
-  }
-});
-```
-
-### Debugging Helpers
-- **Create element inspection utilities**
-- **Log element attributes for debugging**
-- **Include viewport and positioning information**
-- **Track state changes with timestamps**
-
-## Security Considerations
-
-### Content Security Policy
-- **Avoid inline event handlers**
-- **Use addEventListener instead of onclick**
-- **Be cautious with innerHTML - prefer textContent when possible**
-- **Sanitize any user-provided content**
-
-### Google Sites Integration
-- **Expect Google's security measures to remove injected elements**
-- **Use overlay positioning to avoid sanitization**
-- **Don't rely on modifying Google's DOM structure**
-- **Respect Google's UI patterns and styling**
-
-## Comments and Documentation
-
-### Code Comments
-- **Explain "why" not "what"**
-- **Document any workarounds or browser-specific code**
-- **Mark TODO items clearly**
-- **Include performance notes for critical sections**
-
-### Function Documentation
-```javascript
-/**
- * Brief description of function purpose
- * @param {Type} param - Description
- * @returns {Type} Description
- * @throws {Error} When specific condition occurs
- */
-```
-
-## File Organization
-
-### Single File Structure (for content scripts)
-1. **Constants and configuration**
-2. **State management**
-3. **Utility functions**
-4. **Core functionality**
-5. **UI creation and positioning**
-6. **Event handlers**
-7. **Initialization**
-
-### Keep Related Functions Together
-- **Group by responsibility, not alphabetically**
-- **Place utility functions near usage**
-- **Keep setup and cleanup functions adjacent**
+### Google Sites Integration Best Practices
+- **Never fight Google's behavior** - Work with their systems
+- **Use Google's CSS classes** when integrating natively
+- **Respect Google's state management** - Don't manually override
+- **Match Google's timing** - Let their animations complete
+- **Follow Google's patterns** - Hover effects, focus states, etc.
 
 ## Performance Targets
 
-- **Minimize DOM queries - cache elements when possible**
-- **Debounce UI operations to max 10fps (100ms intervals)**
-- **Throttle logging to prevent console spam**
-- **Clean up event listeners and timers**
-- **Avoid memory leaks with proper cleanup**
+- **One-time injection**: No re-injection after successful setup
+- **Minimal DOM queries**: Cache elements and slide IDs appropriately  
+- **Production logging**: Only errors and critical success messages
+- **Event-driven updates**: No polling or continuous monitoring
+- **Clean state management**: Flags prevent unnecessary operations
+
+## Testing Guidelines
+
+### Manual Testing Scenarios
+1. **Quick Actions Integration**: Click arrow → verify menu item appears
+2. **Share Dialog Integration**: Click Share → verify overlay button works
+3. **Slide Navigation**: Change slides → verify URL updates correctly
+4. **Click Responsiveness**: Verify no double-click issues
+5. **Tooltip Display**: Verify Google-style tooltip appears and fades
+
+### Production Preparation
+```javascript
+// Set production flag before Chrome Store upload
+const PRODUCTION = true; // Change this line only
+```
 
 ---
 
-*Follow these rules to maintain consistency with the project's established patterns and ensure optimal performance for browser extension development.* 
+*Follow these rules to maintain consistency with the established dual-integration architecture and ensure optimal performance for both Quick Actions Menu and Share Dialog features.* 
