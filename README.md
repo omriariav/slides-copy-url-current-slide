@@ -1,10 +1,10 @@
 # Google Slides Current Slide Link Extension
 
 A Chrome extension that seamlessly adds a "Copy current slide link" button to Google Slides, providing **two convenient ways** to quickly share direct links to the current slide.
-
+ 
 ## 🎯 Two Ways to Copy Current Slide Links
 
-### 1. Quick Actions Menu (NEW!)
+### 1. Quick Actions Menu 
 <img src="screenshot2.png" alt="Quick Actions Menu Integration" width="400">
 
 Access "Copy current slide link" directly from Google's native quick sharing menu (arrow next to Share button).
@@ -15,19 +15,8 @@ Access "Copy current slide link" directly from Google's native quick sharing men
 Find the button positioned next to Google's "Copy link" button in share dialogs.
 
 ## ⚠️ Disclaimer
-
 **This extension is not affiliated with, endorsed by, or connected to Google Inc. in any way.** This is an independent, open-source project created to enhance the Google Slides user experience.
-
 **Use at your own risk.** The author is not responsible for any damages, data loss, or issues that may arise from using this extension. By installing and using this extension, you acknowledge that you understand and accept these terms.
-
-## ✨ Features
-
-- **🎯 Two convenient access methods**: Quick actions menu + share dialog integration
-- **📱 Google-native experience**: Authentic styling with "Link copied" tooltip  
-- **🔗 Smart URL generation**: Automatically detects current slide and creates proper URLs
-- **⚡ Event-driven performance**: Efficient background processing with minimal resource usage
-- **🛡️ Robust integration**: Respects Google's UI architecture for reliable operation
-- **✅ Visual feedback**: Google-style confirmation tooltip when URL is copied
 
 ## 🚀 Installation
 
@@ -61,49 +50,7 @@ Install directly from the Chrome Web Store:
 4. **Click the button** to instantly copy the current slide's URL to your clipboard
 5. **See the confirmation** - button briefly shows "Copied!" to confirm success
 
-### URL Format
-The extension generates URLs in this format:
-```
-https://docs.google.com/presentation/d/[PRESENTATION_ID]/edit#slide=id.[SLIDE_ID]
-```
-
-## 🔧 Development
-
-### Project Structure
-```
-├── manifest.json          # Extension manifest (v3)
-├── content.js            # Main content script (1400+ lines)
-├── styles.css            # UI styling
-├── icon16.png           # Extension icons
-├── icon48.png
-├── icon128.png
-├── PROJECT_LEARNINGS.md  # Technical documentation
-├── .cursorrules         # Development guidelines
-└── README.md            # This file
-```
-
-### Key Files
-- **`content.js`**: Event-driven slide detection and UI injection
-- **`styles.css`**: Google Material Design compliant styling
-- **`manifest.json`**: Chrome Extension Manifest V3 configuration
-
-## 🧠 Architecture Insights
-### Why Two Integration Methods?
-- **Quick Actions**: Native Google menu integration for seamless UX
-- **Share Dialog**: Overlay positioning for broader compatibility
-
-### State Management
-```javascript
-// Simple flag-based state management
-const state = {
-  isInjecting: false,
-  quickActionsInjected: false,
-  loggedElements: new Map()
-};
-```
-
 ## 📊 Browser Compatibility
-
 - **Chrome**: ✅ Fully supported (Manifest V3)
 - **Edge**: ✅ Should work (Chromium-based)
 
