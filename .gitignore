@@ -93,6 +93,9 @@ localhost-key.pem
 manifest.json.backup
 *.backup
 
+# Release packages
+releases/
+
 # Webpack/Rollup/Parcel artifacts
 .cache/
 .parcel-cache/
