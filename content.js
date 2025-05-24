@@ -1708,13 +1708,11 @@
         
         log('✅ Current slide URL copied successfully from quick actions:', url);
         
-        // Close the menu after successful copy
-        setTimeout(() => {
-          const menu = document.querySelector('.goog-menu.scb-sqa-menu.goog-menu.scb-sqa-menu-vertical[role="menu"]');
-          if (menu) {
-            menu.style.visibility = 'hidden';
-          }
-        }, 500); // Reduced delay since no text animation
+        // Close the menu immediately after successful copy
+        const menu = document.querySelector('.goog-menu.scb-sqa-menu.goog-menu.scb-sqa-menu-vertical[role="menu"]');
+        if (menu) {
+          menu.style.visibility = 'hidden';
+        }
         
       } catch (error) {
         log('❌ Error copying current slide URL from quick actions:', error);
