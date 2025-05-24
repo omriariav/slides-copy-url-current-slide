@@ -82,6 +82,7 @@ const state = {
   dialogFound: false,
   loggedElements: new Map()
 };
+```
 
 ## 📊 Browser Compatibility
 
