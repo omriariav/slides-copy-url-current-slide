@@ -9,9 +9,10 @@ A Chrome extension that seamlessly adds **multiple slide sharing options** to Go
 Access multiple slide options directly from Google's native quick sharing menu (arrow next to Share button):
 
 ### Available Options:
-- **Copy current slide link** - Edit mode URL for collaboration
+- **Copy current slide link** - Standard edit mode URL for collaboration
+- **Copy current slide demo link** - Demo edit mode with toolbar and outline
 - **Copy current slide presentation link** - Presentation mode URL for viewing  
-- **Copy current slide preview link** - Clean preview mode URL
+- **Copy current slide mobile link** - Mobile-optimized presentation view
 - **Export current slide as PNG** - Download current slide as PNG image
 - **Export current slide as PDF** - Download current slide as PDF document
 

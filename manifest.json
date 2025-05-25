@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Google Slides Current Slide URL Copier",
   "version": "2.0",
-  "description": "Enhanced Quick Actions menu integration with multiple slide sharing options: copy edit/presentation/preview links and export current slide as PNG/PDF",
+  "description": "Enhanced Quick Actions menu with 6 options: copy edit/demo/presentation/mobile links and export current slide as PNG/PDF",
   "permissions": ["activeTab", "clipboardWrite"],
   "content_scripts": [
     {

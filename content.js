@@ -2,7 +2,7 @@
 // Inspired by Grammarly's injection strategies
 
 (() => {
-  const DEBUG = true;
+  const DEBUG = false;
   const PRODUCTION = true; // Set to true before uploading to Chrome Store
   const VERBOSE_LOGGING = false; // Set to true for detailed logging
   
@@ -245,7 +245,7 @@
         mutations.forEach(mutation => {
           mutation.addedNodes.forEach(node => {
             if (node.nodeType === Node.ELEMENT_NODE) {
-              detectAndLogDialogs(node);
+              // Dialog detection removed - focusing on Quick Actions menu only
             }
           });
         });
@@ -318,7 +318,7 @@
       mutations.forEach(mutation => {
         mutation.addedNodes.forEach(node => {
           if (node.nodeType === Node.ELEMENT_NODE) {
-            detectAndLogDialogs(node);
+            // Dialog detection removed - focusing on Quick Actions menu only
           }
         });
       });
@@ -400,7 +400,7 @@
   }
   
   /**
-   * Enhanced URL building - supports edit, presentation, preview modes and export formats
+   * Enhanced URL building - supports edit, demo, presentation, mobile modes and export formats
    */
   function buildSlideUrl({ mode = 'EDIT', exportFormat = null } = {}) {
     log('Building slide URL with mode:', mode, 'export:', exportFormat);
@@ -426,11 +426,14 @@
     } else {
       // Viewing modes
       switch (mode) {
+        case 'DEMO':
+          finalUrl = `https://docs.google.com/presentation/d/${presentationId}/edit?rm=demo#slide=id.${slideNumber}`;
+          break;
         case 'PRESENT':
           finalUrl = `https://docs.google.com/presentation/d/${presentationId}/present#slide=id.${slideNumber}`;
           break;
-        case 'PREVIEW':
-          finalUrl = `https://docs.google.com/presentation/d/${presentationId}/preview#slide=id.${slideNumber}`;
+        case 'MOBILE':
+          finalUrl = `https://docs.google.com/presentation/d/${presentationId}/mobilepresent#slide=id.${slideNumber}`;
           break;
         case 'EDIT':
         default:
@@ -616,8 +619,9 @@
     // Create multiple menu items
     const menuOptions = [
       { id: 'current-slide-copy-option', text: 'Copy current slide link', mode: 'EDIT' },
+      { id: 'current-slide-demo-option', text: 'Copy current slide demo link', mode: 'DEMO' },
       { id: 'current-slide-present-option', text: 'Copy current slide presentation link', mode: 'PRESENT' },
-      { id: 'current-slide-preview-option', text: 'Copy current slide preview link', mode: 'PREVIEW' },
+      { id: 'current-slide-mobile-option', text: 'Copy current slide mobile link', mode: 'MOBILE' },
       { id: 'current-slide-export-png', text: 'Export current slide as PNG', exportFormat: 'png' },
       { id: 'current-slide-export-pdf', text: 'Export current slide as PDF', exportFormat: 'pdf' }
     ];
@@ -638,7 +642,7 @@
   }
 
   /**
-   * Create the "Copy current slide link" menu item for quick actions
+   * Create menu item for quick actions with appropriate icon
    */
   function createQuickActionsMenuItem(option) {
     // Create the main menu item container
@@ -666,14 +670,34 @@
     
     // Create icon container
     const iconContainer = document.createElement('div');
-    iconContainer.className = 'goog-menuitem-icon scb-sqa-copy-link-icon-container';
+    if (option.exportFormat) {
+      // For export options, use minimal container styling
+      iconContainer.className = '';
+    } else {
+      // For copy options, use Google's standard icon container classes
+      iconContainer.className = 'goog-menuitem-icon scb-sqa-copy-link-icon-container';
+    }
     iconContainer.style.userSelect = 'none';
     
-    // Create icon
+    // Create icon for each option type
     const icon = document.createElement('div');
-    icon.className = 'scb-sqa-sprite apps-share-sprite scb-sqa-copy-link-icon';
     icon.style.userSelect = 'none';
-    icon.innerHTML = '&nbsp;';
+    
+    if (option.exportFormat) {
+      // Use Google's download icon structure for export options
+      icon.className = 'docs-icon goog-inline-block goog-menuitem-icon';
+      icon.setAttribute('aria-hidden', 'true');
+      icon.style.userSelect = 'none !important';
+      icon.style.opacity = '1 !important';
+      icon.innerHTML = `
+        <div class="docs-icon-img-container docs-icon-img docs-icon-editors-ia-download" style="user-select: none;opacity: 1;">
+        </div>
+      `;
+    } else {
+      // Use Google's original sprite class for copy options
+      icon.className = 'scb-sqa-sprite apps-share-sprite scb-sqa-copy-link-icon';
+      icon.innerHTML = '&nbsp;';
+    }
     
     // Assemble the structure
     iconContainer.appendChild(icon);
