@@ -29,6 +29,7 @@ yarn.lock
 *.swp
 *.swo
 *~
+*.code-workspace
 
 # OS generated files
 .DS_Store
