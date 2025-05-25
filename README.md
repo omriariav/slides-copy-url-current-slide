@@ -1,6 +1,8 @@
 # Google Slides Current Slide Link Extension
 
 A Chrome extension that seamlessly adds a "Copy current slide link" button to Google Slides, providing **two convenient ways** to quickly share direct links to the current slide.
+
+(Yes, I know you can just copy the current URL — but many people don’t realize it works, since the slide ID isn’t a simple number and looks a bit obscure.)
  
 ## 🎯 Two Ways to Copy Current Slide Links
 
