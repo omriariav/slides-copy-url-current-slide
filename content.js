@@ -3,7 +3,7 @@
 
 (() => {
   const DEBUG = true;
-  const PRODUCTION = false; // Set to true before uploading to Chrome Store
+  const PRODUCTION = true; // Set to true before uploading to Chrome Store
   const VERBOSE_LOGGING = false; // Set to true for detailed logging
   
   // Production-aware logging
@@ -122,53 +122,47 @@
   // Main initialization
   function mainInit() {
     if (state.isInitialized) {
-      verboseLog('Already initialized, skipping');
+      log('⚠️ Extension already initialized, skipping duplicate initialization');
       return;
     }
     
-    state.isInitialized = true;
-    log('Main initialization started in', state.frameType);
+    log('🚀 Main initialization starting...');
     
-    // Set up iframe communication in main frame
+    // Set up message handling between frames
     if (!state.isInIframe) {
+      // Main frame - set up message handler for iframe communication
       setupMainFrameMessageHandler();
-    }
-    
-    // Set up efficient event-driven share button detection
-    if (DEBUG) {
-      setupShareButtonClickDetection();
-      
-      // Set up quick actions menu detection - NEW FEATURE
-      setupQuickActionsMenuDetection();
-      
-      // Immediately scan for existing quick actions menus and inject our option
-      scanForExistingQuickActionsMenu();
-      
-      // Immediately scan for existing dialogs
-      if (!PRODUCTION) {
-        verboseLog('🔍 IMMEDIATE SCAN - Checking for existing dialogs in', state.frameType);
-        const existingDialogs = document.querySelectorAll('[role="dialog"], [role="alertdialog"], .docs-dialog, .modal');
-        if (existingDialogs.length > 0) {
-          log('Found existing dialogs:', existingDialogs.length);
-          // Only log first dialog to avoid spam
-          if (existingDialogs[0]) {
-            logDialogElement('🎯 EXISTING DIALOG (immediate)', existingDialogs[0], 'immediate scan');
-          }
-        }
-      }
     }
     
     // Different initialization based on frame type
     if (state.isShareIframe) {
-      // We're in the share iframe - focus on dialog detection
-      log('🎯 Share iframe detected - monitoring for share dialogs');
-      setupShareIframeMonitoring();
+      // We're in the share iframe - Quick Actions menu not available here
+      log('🎯 Share iframe detected - Quick Actions menu not available');
     } else if (!state.isInIframe) {
-      // We're in the main frame - just wait for slides to be ready and monitor
+      // We're in the main frame - set up Quick Actions menu
+      log('🎯 Main frame detected - setting up Quick Actions menu');
+      
       waitForSlidesReady()
         .then(() => {
           log('Google Slides ready in main frame');
           state.isReady = true;
+          
+          // Set up slide change monitoring
+          monitorSlideChanges();
+          
+          // Set up Quick Actions menu detection
+          setupQuickActionsMenuDetection();
+          
+          // Proactive menu injection
+          scanForExistingQuickActionsMenu();
+          
+          // Delayed scan for menu injection
+          setTimeout(() => {
+            if (!state.quickActionsInjected) {
+              log('🔄 Delayed scan for Quick Actions menu...');
+              scanForExistingQuickActionsMenu();
+            }
+          }, 1000);
         })
         .catch(err => {
           log('Error during initialization:', err);
@@ -177,6 +171,10 @@
       // We're in some other iframe - just monitor
       verboseLog('🔍 Other iframe detected - monitoring only');
     }
+    
+    // Mark as initialized
+    state.isInitialized = true;
+    log('✅ Extension initialized');
   }
   
   /**
@@ -188,11 +186,14 @@
     window.addEventListener('message', (event) => {
       // Only handle messages from our iframe
       if (event.data && event.data.type === 'GET_SLIDE_URL') {
-        log('📨 Received slide URL request from iframe (edit mode only):', event.data);
+        log('📨 Received slide URL request from iframe:', event.data);
         
         try {
-          // Always use edit mode
-          const url = buildSlideUrl({ mode: 'EDIT' });
+          // Use the requested mode and export format
+          const url = buildSlideUrl({ 
+            mode: event.data.mode || 'EDIT',
+            exportFormat: event.data.exportFormat || null
+          });
           
           log('📤 Sending slide URL to iframe:', url);
           
@@ -200,7 +201,8 @@
           event.source.postMessage({
             type: 'SLIDE_URL_RESPONSE',
             url: url,
-            mode: 'EDIT'
+            mode: event.data.mode || 'EDIT',
+            exportFormat: event.data.exportFormat || null
           }, event.origin);
           
         } catch (error) {
@@ -215,48 +217,6 @@
         }
       }
     });
-  }
-  
-  /**
-   * Setup monitoring specifically for the share iframe
-   */
-  function setupShareIframeMonitoring() {
-    log('🎯 Setting up share iframe monitoring');
-    
-    // Enhanced dialog detection for share iframe (throttled)
-    const shareObserver = new MutationObserver((mutations) => {
-      mutations.forEach(mutation => {
-        mutation.addedNodes.forEach(node => {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            // More selective detection in share iframe
-            const elementKey = `${node.tagName}-${node.className}-${node.getAttribute ? node.getAttribute('jsname') : ''}`;
-            
-            throttleLog(elementKey, () => {
-              detectAndLogDialogs(node);
-            }, 3000);
-          }
-        });
-      });
-    });
-    
-    shareObserver.observe(document.body || document.documentElement, {
-      childList: true,
-      subtree: true,
-      attributes: false // Reduce attribute monitoring
-    });
-    
-    // Much less frequent scanning in share iframe
-    setInterval(() => {
-      const dialogs = document.querySelectorAll('[role="dialog"]');
-      if (dialogs.length > 0) {
-        log('🔍 SHARE IFRAME SCAN - Found dialogs:', dialogs.length);
-        // Only analyze the first dialog to avoid spam
-        if (dialogs[0] && !state.loggedElements.has('main-dialog-analyzed')) {
-          logDialogElement('🎯 MAIN SHARE DIALOG', dialogs[0], 'periodic scan');
-          state.loggedElements.set('main-dialog-analyzed', Date.now());
-        }
-      }
-    }, 10000); // Reduced to every 10 seconds
   }
   
   /**
@@ -311,762 +271,13 @@
    * Check if Google Slides interface is ready
    */
   function isSlidesReady() {
-    // Look for key Google Slides UI elements
-    const indicators = [
-      '#docs-chrome',
-      '[role="main"]',
-      '.punch-present-edit-mode',
-      '.app-switcher-button'
-    ];
+    // Basic checks for Google Slides
+    const hasPresentation = /\/presentation\/d\//.test(location.href);
+    const hasSlideElements = document.querySelector('[role="main"]') || 
+                             document.querySelector('.punch-present-edit-mode') ||
+                             document.querySelector('#docs-chrome');
     
-    return indicators.some(selector => document.querySelector(selector));
-  }
-  
-  /**
-   * Detect and log dialog elements
-   */
-  function detectAndLogDialogs(element) {
-    // Look for dialog-related elements
-    const dialogSelectors = [
-      '[role="dialog"]',
-      '[role="alertdialog"]',
-      '.docs-dialog',
-      '.modal',
-      '.popup',
-      '[aria-modal="true"]',
-      '.share-client-ActionBarView',
-      '.share-client-ShareDialog',
-      '.docs-material-dialog'
-    ];
-
-    dialogSelectors.forEach(selector => {
-      // Check if the element itself matches
-      if (element.matches && element.matches(selector)) {
-        logDialogElement('🎯 DIALOG DETECTED', element, selector);
-      }
-      
-      // Check for child elements that match
-      const dialogElements = element.querySelectorAll ? element.querySelectorAll(selector) : [];
-      dialogElements.forEach(dialogEl => {
-        const elementKey = `dialog-${dialogEl.tagName}-${dialogEl.className}`;
-        throttleLog(elementKey, () => {
-          logDialogElement('🎯 DIALOG DETECTED', dialogEl, selector);
-        }, 5000);
-      });
-    });
-
-    // Check for share-related elements with specific patterns (but allow multiple detections)
-    if (element.textContent && element.textContent.includes('Share')) {
-      log('🎯 SHARE TEXT DETECTED in element:', {
-        tagName: element.tagName,
-        className: element.className,
-        jsname: element.getAttribute('jsname'),
-        id: element.id,
-        textContent: element.textContent.substring(0, 100) + '...'
-      });
-      
-      // FIX: Improve throttling for share dialog detection
-      // Create a unique key that includes more context
-      const shareElementKey = `share-dialog-${element.tagName}-${element.className}-${Date.now()}`;
-      
-      // Use shorter throttling time and allow re-detection
-      throttleLog(shareElementKey, () => {
-        findShareDialogAndAnalyzeButtons(element);
-      }, 500); // Reduced to 500ms for more responsive detection
-    }
-
-    // Reduce interesting element logging
-    if (VERBOSE_LOGGING && element.className && typeof element.className === 'string') {
-      const interestingClasses = [
-        'share', 'dialog', 'modal', 'popup', 'overlay', 'menu', 
-        'button', 'input', 'textarea', 'select', 'form'
-      ];
-      
-      const hasInterestingClass = interestingClasses.some(cls => 
-        element.className.toLowerCase().includes(cls)
-      );
-      
-      if (hasInterestingClass) {
-        logInterestingElement('🔍 INTERESTING ELEMENT', element);
-      }
-    }
-  }
-  
-  /**
-   * Find the parent dialog element and analyze all buttons within it
-   */
-  function findShareDialogAndAnalyzeButtons(shareElement) {
-    log('🔍 SEARCHING FOR PARENT DIALOG...');
-    
-    // Traverse up the DOM tree to find parent with role="dialog"
-    let currentElement = shareElement;
-    let dialogParent = null;
-    let levels = 0;
-    
-    while (currentElement && currentElement !== document.body && levels < 20) {
-      log(`  Level ${levels}: ${currentElement.tagName}`, {
-        className: currentElement.className,
-        role: currentElement.getAttribute ? currentElement.getAttribute('role') : null,
-        jsname: currentElement.getAttribute ? currentElement.getAttribute('jsname') : null,
-        id: currentElement.id
-      });
-      
-      if (currentElement.getAttribute && currentElement.getAttribute('role') === 'dialog') {
-        dialogParent = currentElement;
-        log(`🎯 FOUND DIALOG PARENT at level ${levels}:`, {
-          tagName: dialogParent.tagName,
-          className: dialogParent.className,
-          jsname: dialogParent.getAttribute('jsname'),
-          id: dialogParent.id
-        });
-        break;
-      }
-      
-      currentElement = currentElement.parentElement;
-      levels++;
-    }
-    
-    if (!dialogParent) {
-      log('❌ No parent dialog found within 20 levels');
-      return;
-    }
-    
-    // Now find and log ALL buttons within the dialog
-    analyzeDialogButtons(dialogParent);
-  }
-  
-  /**
-   * Analyze all buttons within the dialog
-   */
-  function analyzeDialogButtons(dialogElement) {
-    log('🔘 ANALYZING ALL BUTTONS IN SHARE DIALOG:');
-    
-    // Find all button elements
-    const buttonSelectors = [
-      'button',
-      '[role="button"]',
-      'input[type="button"]',
-      'input[type="submit"]',
-      '[type="button"]'
-    ];
-    
-    const allButtons = [];
-    buttonSelectors.forEach(selector => {
-      const buttons = dialogElement.querySelectorAll(selector);
-      buttons.forEach(btn => {
-        if (!allButtons.includes(btn)) {
-          allButtons.push(btn);
-        }
-      });
-    });
-    
-    log(`📊 FOUND ${allButtons.length} BUTTONS IN SHARE DIALOG:`);
-    
-    let copyLinkButton = null;
-    
-    allButtons.forEach((button, index) => {
-      const buttonInfo = {
-        index: index + 1,
-        tagName: button.tagName,
-        type: button.type,
-        className: button.className,
-        jsname: button.getAttribute('jsname'),
-        id: button.id,
-        role: button.getAttribute('role'),
-        ariaLabel: button.getAttribute('aria-label'),
-        title: button.title,
-        textContent: button.textContent ? button.textContent.trim() : '',
-        innerHTML: button.innerHTML ? button.innerHTML.substring(0, 200) + '...' : '',
-        disabled: button.disabled,
-        style: button.style.cssText ? button.style.cssText.substring(0, 100) + '...' : '',
-        allClasses: button.classList ? Array.from(button.classList) : [],
-        allAttributes: getElementAttributes(button),
-        parentInfo: {
-          tagName: button.parentElement ? button.parentElement.tagName : null,
-          className: button.parentElement ? button.parentElement.className : null,
-          jsname: button.parentElement ? button.parentElement.getAttribute('jsname') : null
-        }
-      };
-      
-      log(`  🔘 BUTTON #${index + 1}:`, buttonInfo);
-      
-      // Check if this is the "Copy link" button
-      const buttonText = button.textContent.toLowerCase().trim();
-      if (buttonText.includes('copy') && buttonText.includes('link')) {
-        copyLinkButton = button;
-        log(`    🎯 FOUND COPY LINK BUTTON:`, {
-          element: button,
-          textContent: button.textContent.trim(),
-          target: 'This is where we will inject our button!'
-        });
-      }
-      
-      // Special attention to buttons with specific text content
-      if (buttonText.includes('copy') || buttonText.includes('link') || buttonText.includes('share') || buttonText.includes('done')) {
-        log(`    ⭐ SPECIAL BUTTON - "${buttonText}":`, {
-          element: button,
-          possibleTarget: 'This might be where we can inject our button'
-        });
-      }
-    });
-    
-    // When share dialog detected, show our overlay button (which works!)
-    log('🧪 SHARE DIALOG DETECTED - SHOWING OVERLAY BUTTON');
-    
-    // FIX: Always remove existing button first to ensure clean state
-    const existingButton = document.getElementById('slide-url-copy-button-overlay');
-    if (existingButton) {
-      log('🧹 Removing existing overlay button for clean re-injection');
-      existingButton.remove();
-    }
-    
-    // Create new overlay button
-    injectTestButton();
-    
-    // Set up dialog close detection to reset state
-    setupDialogCloseDetection();
-  }
-  
-  /**
-   * Create the main overlay button positioned next to Copy link button
-   */
-  function createTestButton() {
-    const button = document.createElement('button');
-    
-    // Set basic attributes
-    button.id = 'slide-url-copy-button-overlay';
-    button.className = 'slide-url-overlay-button';
-    button.setAttribute('data-testid', 'slide-url-copy-button-overlay');
-    button.setAttribute('type', 'button');
-    button.setAttribute('aria-label', 'Copy URL for current slide');
-    button.textContent = '📎 Copy Slide URL';
-    
-    // Apply Google-style button appearance
-    button.style.cssText = `
-      position: fixed !important;
-      z-index: 999999 !important;
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      color: #1a73e8 !important;
-      border: 1px solid #747775 !important;
-      border-radius: 24px !important;
-      font-family: 'Google Sans', Roboto, Arial, sans-serif !important;
-      font-size: .875rem !important;
-      font-weight: 500 !important;
-      height: 40px !important;
-      padding: 0 20px !important;
-      box-shadow: none !important;
-      cursor: pointer !important;
-      outline: none !important;
-      gap: 8px !important;
-      transition: border-color 0.2s, color 0.2s, background 0.2s !important;
-    `;
-    button.innerHTML = `
-      <span class="slide-url-overlay-button-text" style="color:#1a73e8;">Copy current slide link</span>
-    `;
-    
-    // Add Google-style hover effect
-    if (!document.head.querySelector('[data-slide-url-overlay-hover-style]')) {
-      const style = document.createElement('style');
-      style.setAttribute('data-slide-url-overlay-hover-style', 'true');
-      style.textContent = `
-        #slide-url-copy-button-overlay {
-          background: #fff !important;
-        }
-        #slide-url-copy-button-overlay:hover {
-          background: rgba(11, 87, 208, 0.09) !important;
-        }
-        .slide-url-overlay-button {
-          background: #fff !important;
-        }
-        .slide-url-overlay-button:hover {
-          background: rgba(11, 87, 208, 0.09) !important;
-        }
-      `;
-      document.head.appendChild(style);
-    }
-    
-    return button;
-  }
-  
-  /**
-   * Position the overlay button next to the Copy link button
-   */
-  function positionOverlayButton(overlayButton) {
-    // Find the Copy link button across all frames
-    let copyLinkButton = null;
-    
-    // Try to find in current frame first
-    copyLinkButton = Array.from(document.querySelectorAll('button')).find(btn => 
-      btn.textContent.toLowerCase().includes('copy') && btn.textContent.toLowerCase().includes('link')
-    );
-    
-    if (!copyLinkButton) {
-      log('❌ Copy link button not found for positioning');
-      // Fallback to center positioning
-      overlayButton.style.top = '50%';
-      overlayButton.style.left = '50%';
-      overlayButton.style.transform = 'translate(-50%, -50%)';
-      return;
-    }
-    
-    // Get the position of the Copy link button
-    const copyLinkRect = copyLinkButton.getBoundingClientRect();
-    
-    // Calculate position for our button (to the right of Copy link button)
-    const buttonGap = 8; // 8px gap between buttons
-    const leftPosition = copyLinkRect.right + buttonGap;
-    const topPosition = copyLinkRect.top;
-    
-    // Position our button
-    overlayButton.style.left = `${leftPosition}px`;
-    overlayButton.style.top = `${topPosition}px`;
-    overlayButton.style.transform = 'none'; // Remove center transform
-    
-    log('📍 Positioned overlay button next to Copy link:', {
-      copyLinkPosition: {
-        left: copyLinkRect.left,
-        top: copyLinkRect.top,
-        right: copyLinkRect.right,
-        bottom: copyLinkRect.bottom,
-        width: copyLinkRect.width,
-        height: copyLinkRect.height
-      },
-      overlayPosition: {
-        left: leftPosition,
-        top: topPosition
-      }
-    });
-    
-    // Verify button is visible in viewport
-    const overlayRect = overlayButton.getBoundingClientRect();
-    const isInViewport = overlayRect.left >= 0 && 
-                        overlayRect.top >= 0 && 
-                        overlayRect.right <= window.innerWidth && 
-                        overlayRect.bottom <= window.innerHeight;
-    
-    if (!isInViewport) {
-      log('⚠️ Button positioned outside viewport, adjusting...');
-      
-      // If button goes off screen to the right, position it to the left of Copy link
-      if (overlayRect.right > window.innerWidth) {
-        const leftPosition = copyLinkRect.left - overlayRect.width - buttonGap;
-        overlayButton.style.left = `${Math.max(0, leftPosition)}px`;
-        log('📍 Repositioned to left of Copy link button');
-      }
-      
-      // If button goes off screen vertically, adjust
-      if (overlayRect.bottom > window.innerHeight) {
-        const topPosition = window.innerHeight - overlayRect.height - 10;
-        overlayButton.style.top = `${Math.max(0, topPosition)}px`;
-        log('📍 Repositioned vertically to stay in viewport');
-      }
-    }
-  }
-  
-  /**
-   * Show the main overlay button positioned next to Copy link button
-   */
-  function injectTestButton() {
-    // Prevent concurrent injections
-    if (state.isInjecting) {
-      log('⚠️ Injection already in progress, skipping...');
-      return;
-    }
-    
-    state.isInjecting = true;
-    log('🎯 SHOWING SLIDE URL OVERLAY BUTTON NEXT TO COPY LINK...');
-    
-    // Remove ALL existing overlay buttons (use more thorough cleanup)
-    const existingButtons = document.querySelectorAll('#slide-url-copy-button-overlay, .slide-url-overlay-button');
-    if (existingButtons.length > 0) {
-      log(`🧹 Removing ${existingButtons.length} existing overlay button(s)`);
-      existingButtons.forEach(btn => btn.remove());
-    }
-    
-    // Create the overlay button
-    const overlayButton = createTestButton();
-    
-    // Add click handler
-    overlayButton.addEventListener('click', createButtonClickHandler(overlayButton));
-    
-    // Inject to body first (for positioning calculation)
-    document.body.appendChild(overlayButton);
-    
-    // Position it next to the Copy link button
-    positionOverlayButton(overlayButton);
-    
-    log('✅ OVERLAY BUTTON POSITIONED NEXT TO COPY LINK:', {
-      buttonElement: overlayButton,
-      buttonProperties: {
-        id: overlayButton.id,
-        textContent: overlayButton.textContent,
-        position: {
-          left: overlayButton.style.left,
-          top: overlayButton.style.top
-        }
-      }
-    });
-    
-    // Monitor for dialog movement/resize and reposition accordingly
-    let repositionTimer;
-    const repositionButton = () => {
-      clearTimeout(repositionTimer);
-      repositionTimer = setTimeout(() => {
-        if (overlayButton.parentNode) {
-          positionOverlayButton(overlayButton);
-        }
-      }, 100); // Debounce repositioning
-    };
-    
-    // Listen for window resize and scroll
-    window.addEventListener('resize', repositionButton);
-    window.addEventListener('scroll', repositionButton);
-    
-    // Add click-outside to dismiss (but not immediate)
-    const dismissOnClickOutside = (event) => {
-      if (event.target !== overlayButton && !overlayButton.contains(event.target)) {
-        overlayButton.remove();
-        window.removeEventListener('resize', repositionButton);
-        window.removeEventListener('scroll', repositionButton);
-        document.removeEventListener('click', dismissOnClickOutside);
-        state.isInjecting = false; // Reset flag
-        log('🎯 Overlay button dismissed by click outside');
-      }
-    };
-    
-    // Add slight delay before enabling click-outside
-    setTimeout(() => {
-      document.addEventListener('click', dismissOnClickOutside);
-    }, 1000);
-    
-    // Add Google-style hover effect if not already present
-    if (!document.head.querySelector('[data-slide-url-overlay-hover-style]')) {
-      const style = document.createElement('style');
-      style.setAttribute('data-slide-url-overlay-hover-style', 'true');
-      style.textContent = `
-        #slide-url-copy-button-overlay:hover {
-          background: rgba(11, 87, 208, 0.09) !important;
-        }
-        .slide-url-overlay-button:hover {
-          background: rgba(11, 87, 208, 0.09) !important;
-        }
-      `;
-      document.head.appendChild(style);
-    }
-    
-    // Reset injection flag after setup is complete
-    state.isInjecting = false;
-    
-    return overlayButton;
-  }
-  
-  /**
-   * Analyze text content within share dialog elements
-   */
-  function analyzeShareDialogText(element) {
-    log('📝 SHARE DIALOG TEXT ANALYSIS for:', {
-      tagName: element.tagName,
-      className: element.className,
-      jsname: element.getAttribute('jsname'),
-      id: element.id
-    });
-    
-    // Find all text-containing elements within this element
-    const textElements = [];
-    
-    // Get all descendant elements
-    const allDescendants = element.querySelectorAll('*');
-    
-    allDescendants.forEach((descendant, index) => {
-      const textContent = descendant.textContent ? descendant.textContent.trim() : '';
-      if (textContent.length > 0) {
-        // Check for specific keywords
-        const hasShare = textContent.toLowerCase().includes('share');
-        const hasWithAccess = textContent.toLowerCase().includes('with access');
-        const hasAccess = textContent.toLowerCase().includes('access');
-        const hasWith = textContent.toLowerCase().includes('with');
-        
-        if (hasShare || hasWithAccess || hasAccess || hasWith) {
-          textElements.push({
-            index: index,
-            tagName: descendant.tagName,
-            className: descendant.className,
-            jsname: descendant.getAttribute('jsname'),
-            id: descendant.id,
-            textContent: textContent,
-            hasShare: hasShare,
-            hasWithAccess: hasWithAccess,
-            hasAccess: hasAccess,
-            hasWith: hasWith,
-            element: descendant
-          });
-        }
-      }
-    });
-    
-    log('📋 TEXT ELEMENTS WITH KEYWORDS:', textElements.length);
-    textElements.forEach((textEl, index) => {
-      const keywords = [];
-      if (textEl.hasShare) keywords.push('SHARE');
-      if (textEl.hasWithAccess) keywords.push('WITH ACCESS');
-      if (textEl.hasAccess) keywords.push('ACCESS');
-      if (textEl.hasWith) keywords.push('WITH');
-      
-      log(`  📄 Text Element #${index + 1} [${keywords.join(', ')}]:`, {
-        tagName: textEl.tagName,
-        className: textEl.className,
-        jsname: textEl.jsname,
-        id: textEl.id,
-        textContent: textEl.textContent,
-        element: textEl.element
-      });
-    });
-    
-    // Also analyze direct text nodes
-    analyzeTextNodes(element);
-    
-    // Look for specific share dialog patterns
-    const sharePatterns = [
-      /share\s+['"][^'"]*['"]?/i,
-      /with\s+access/i,
-      /can\s+(view|edit|comment)/i,
-      /get\s+link/i,
-      /copy\s+link/i,
-      /share\s+with\s+people/i
-    ];
-    
-    const fullText = element.textContent;
-    sharePatterns.forEach((pattern, index) => {
-      const match = fullText.match(pattern);
-      if (match) {
-        log(`🎯 SHARE PATTERN #${index + 1} FOUND:`, {
-          pattern: pattern.toString(),
-          match: match[0],
-          fullMatch: match
-        });
-      }
-    });
-  }
-  
-  /**
-   * Analyze text nodes specifically
-   */
-  function analyzeTextNodes(element) {
-    log('📝 TEXT NODES ANALYSIS:');
-    
-    const walker = document.createTreeWalker(
-      element,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode: function(node) {
-          return node.textContent.trim().length > 0 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-        }
-      }
-    );
-    
-    const textNodes = [];
-    let node;
-    while (node = walker.nextNode()) {
-      const text = node.textContent.trim();
-      if (text.length > 0) {
-        textNodes.push({
-          text: text,
-          parentTag: node.parentNode.tagName,
-          parentClass: node.parentNode.className,
-          parentJsName: node.parentNode.getAttribute ? node.parentNode.getAttribute('jsname') : null,
-          parentId: node.parentNode.id,
-          hasKeywords: /share|access|with|link|copy|get/i.test(text)
-        });
-      }
-    }
-    
-    log(`📄 FOUND ${textNodes.length} TEXT NODES:`);
-    textNodes.forEach((textNode, index) => {
-      if (textNode.hasKeywords) {
-        log(`  🎯 Text Node #${index + 1} [KEYWORDS]:`, textNode);
-      } else {
-        log(`  📝 Text Node #${index + 1}:`, textNode);
-      }
-    });
-  }
-  
-  /**
-   * Log detailed information about a dialog element
-   */
-  function logDialogElement(prefix, element, selector) {
-    const dialogInfo = {
-      tagName: element.tagName,
-      id: element.id,
-      className: element.className,
-      jsname: element.getAttribute('jsname'),
-      role: element.getAttribute('role'),
-      ariaLabel: element.getAttribute('aria-label'),
-      ariaModal: element.getAttribute('aria-modal'),
-      textContent: element.textContent ? element.textContent.substring(0, 200) + '...' : '',
-      innerHTML: element.innerHTML ? element.innerHTML.substring(0, 300) + '...' : '',
-      element: element
-    };
-    
-    log(`${prefix} (${selector}):`, dialogInfo);
-    
-    // Special detailed logging for role="dialog" elements
-    if (element.getAttribute('role') === 'dialog') {
-      log('🎯 DIALOG ROLE DETECTED - Enhanced Details:', {
-        'Class Attribute': element.className,
-        'JSName Attribute': element.getAttribute('jsname'),
-        'All Classes': element.classList ? Array.from(element.classList) : [],
-        'All Attributes': getElementAttributes(element),
-        'Data Attributes': getDataAttributes(element)
-      });
-    }
-    
-    // Log all child elements
-    logDialogChildren(element);
-  }
-  
-  /**
-   * Get all attributes of an element
-   */
-  function getElementAttributes(element) {
-    const attrs = {};
-    if (element.attributes) {
-      for (let i = 0; i < element.attributes.length; i++) {
-        const attr = element.attributes[i];
-        attrs[attr.name] = attr.value;
-      }
-    }
-    return attrs;
-  }
-  
-  /**
-   * Get all data attributes of an element
-   */
-  function getDataAttributes(element) {
-    const dataAttrs = {};
-    if (element.attributes) {
-      for (let i = 0; i < element.attributes.length; i++) {
-        const attr = element.attributes[i];
-        if (attr.name.startsWith('data-')) {
-          dataAttrs[attr.name] = attr.value;
-        }
-      }
-    }
-    return dataAttrs;
-  }
-  
-  /**
-   * Log all children of a dialog element (simplified)
-   */
-  function logDialogChildren(dialogElement) {
-    verboseLog('📋 DIALOG CHILDREN:');
-    
-    if (!VERBOSE_LOGGING) {
-      // Simplified logging - just count elements
-      const buttons = dialogElement.querySelectorAll('button, [role="button"]');
-      const inputs = dialogElement.querySelectorAll('input, textarea, select');
-      const textElements = dialogElement.querySelectorAll('span, div, p');
-      
-      log(`📊 DIALOG SUMMARY: ${buttons.length} buttons, ${inputs.length} inputs, ${textElements.length} text elements`);
-      
-      // Log key elements only
-      buttons.forEach((btn, index) => {
-        if (index < 3) { // Only first 3 buttons
-          log(`  🔘 BUTTON #${index + 1}:`, {
-            tagName: btn.tagName,
-            className: btn.className,
-            jsname: btn.getAttribute('jsname'),
-            textContent: btn.textContent ? btn.textContent.trim().substring(0, 50) : ''
-          });
-        }
-      });
-      
-      return;
-    }
-    
-    // Full detailed logging (only if VERBOSE_LOGGING is true)
-    const allChildren = dialogElement.querySelectorAll('*');
-    let buttonCount = 0;
-    let inputCount = 0;
-    let textCount = 0;
-    
-    allChildren.forEach((child, index) => {
-      const info = {
-        index: index,
-        tagName: child.tagName,
-        id: child.id,
-        className: child.className,
-        jsname: child.getAttribute('jsname'),
-        type: child.type,
-        role: child.getAttribute('role'),
-        ariaLabel: child.getAttribute('aria-label'),
-        placeholder: child.placeholder,
-        value: child.value,
-        textContent: child.textContent ? child.textContent.trim().substring(0, 100) : '',
-        href: child.href
-      };
-      
-      // Count different types
-      if (child.tagName === 'BUTTON' || child.type === 'button' || child.getAttribute('role') === 'button') {
-        buttonCount++;
-        verboseLog(`  🔘 BUTTON #${buttonCount}:`, {
-          ...info,
-          'All Classes': child.classList ? Array.from(child.classList) : [],
-          'JSName': child.getAttribute('jsname'),
-          'All Attributes': getElementAttributes(child)
-        });
-      } else if (child.tagName === 'INPUT' || child.tagName === 'TEXTAREA' || child.tagName === 'SELECT') {
-        inputCount++;
-        verboseLog(`  📝 INPUT #${inputCount}:`, {
-          ...info,
-          'All Classes': child.classList ? Array.from(child.classList) : [],
-          'JSName': child.getAttribute('jsname')
-        });
-      } else if (child.tagName === 'SPAN' || child.tagName === 'DIV' || child.tagName === 'P') {
-        if (child.textContent && child.textContent.trim().length > 0) {
-          textCount++;
-          verboseLog(`  📄 TEXT #${textCount}:`, {
-            ...info,
-            'All Classes': child.classList ? Array.from(child.classList) : [],
-            'JSName': child.getAttribute('jsname')
-          });
-        }
-      }
-    });
-    
-    verboseLog(`📊 DIALOG SUMMARY: ${buttonCount} buttons, ${inputCount} inputs, ${textCount} text elements, ${allChildren.length} total children`);
-    
-    // Special scan for elements with jsname attributes
-    const jsNameElements = dialogElement.querySelectorAll('[jsname]');
-    if (jsNameElements.length > 0) {
-      verboseLog('🏷️  ELEMENTS WITH JSNAME:', jsNameElements.length);
-      jsNameElements.forEach((el, index) => {
-        if (index < 5) { // Only first 5 elements
-          verboseLog(`  JSName Element #${index + 1}:`, {
-            tagName: el.tagName,
-            jsname: el.getAttribute('jsname'),
-            className: el.className,
-            id: el.id,
-            textContent: el.textContent ? el.textContent.trim().substring(0, 50) + '...' : '',
-            element: el
-          });
-        }
-      });
-    }
-  }
-  
-  /**
-   * Log interesting elements that might be relevant
-   */
-  function logInterestingElement(prefix, element) {
-    log(`${prefix}:`, {
-      tagName: element.tagName,
-      id: element.id,
-      className: element.className,
-      textContent: element.textContent ? element.textContent.substring(0, 100) + '...' : '',
-      element: element
-    });
+    return hasPresentation && hasSlideElements;
   }
   
   /**
@@ -1189,10 +400,10 @@
   }
   
   /**
-   * Enhanced URL building - edit mode only
+   * Enhanced URL building - supports edit, presentation, preview modes and export formats
    */
-  function buildSlideUrl({ mode = 'EDIT' } = {}) {
-    log('Building slide URL (edit mode only)');
+  function buildSlideUrl({ mode = 'EDIT', exportFormat = null } = {}) {
+    log('Building slide URL with mode:', mode, 'export:', exportFormat);
     
     const href = location.href;
     const idMatch = href.match(/\/presentation\/d\/([^/]+)/);
@@ -1207,245 +418,33 @@
     
     log('Presentation ID:', presentationId, 'Slide ID:', slideNumber);
     
-    // Always generate edit URL
-    const finalUrl = `https://docs.google.com/presentation/d/${presentationId}/edit#slide=id.${slideNumber}`;
+    let finalUrl;
+    
+    if (exportFormat) {
+      // Export formats - downloads the current slide
+      finalUrl = `https://docs.google.com/presentation/d/${presentationId}/export?format=${exportFormat}&slide=${slideNumber}`;
+    } else {
+      // Viewing modes
+      switch (mode) {
+        case 'PRESENT':
+          finalUrl = `https://docs.google.com/presentation/d/${presentationId}/present#slide=id.${slideNumber}`;
+          break;
+        case 'PREVIEW':
+          finalUrl = `https://docs.google.com/presentation/d/${presentationId}/preview#slide=id.${slideNumber}`;
+          break;
+        case 'EDIT':
+        default:
+          finalUrl = `https://docs.google.com/presentation/d/${presentationId}/edit#slide=id.${slideNumber}`;
+          break;
+      }
+    }
     
     log('Final URL generated:', finalUrl);
     return finalUrl;
   }
   
   /**
-   * Enhanced button state management following Grammarly's patterns
-   */
-  function updateButtonState(button, state, message = null) {
-    const textSpan = button.querySelector('.slide-url-overlay-button-text');
-    if (!textSpan) return;
-    if (state === 'success') {
-      textSpan.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Copied!&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
-      ;
-      setTimeout(() => {
-        textSpan.textContent = 'Copy current slide link';
-      }, 2000);
-    } else {
-      textSpan.textContent = 'Copy current slide link';
-    }
-  }
-  
-  /**
-   * Enhanced button click handler with better error handling
-   */
-  function createButtonClickHandler(button) {
-    return async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      
-      log('🔗 Copy slide URL button clicked!');
-      updateButtonState(button, 'loading');
-      
-      try {
-        let url;
-        
-        if (state.isShareIframe) {
-          // We're in iframe, need to communicate with main frame
-          url = await requestSlideUrlFromMainFrame();
-        } else {
-          // We're in main frame, can get URL directly
-          url = buildSlideUrl({ mode: 'EDIT' });
-        }
-        
-        await navigator.clipboard.writeText(url);
-        updateButtonState(button, 'success');
-        
-        // Show Google-style "Link copied" tooltip
-        showLinkCopiedTooltip();
-        
-        log('✅ Slide URL copied successfully:', url);
-        
-      } catch (error) {
-        log('❌ Error copying slide URL:', error);
-        updateButtonState(button, 'error', 'Copy failed');
-      }
-    };
-  }
-  
-  /**
-   * Promise-based iframe communication
-   */
-  function requestSlideUrlFromMainFrame() {
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Timeout waiting for slide URL'));
-      }, 5000);
-      
-      const messageHandler = (event) => {
-        if (event.data && event.data.type === 'SLIDE_URL_RESPONSE') {
-          clearTimeout(timeout);
-          window.removeEventListener('message', messageHandler);
-          
-          if (event.data.error) {
-            reject(new Error(event.data.error));
-          } else {
-            resolve(event.data.url);
-          }
-        }
-      };
-      
-      window.addEventListener('message', messageHandler);
-      
-      window.parent.postMessage({
-        type: 'GET_SLIDE_URL',
-        mode: 'EDIT'
-      }, '*');
-    });
-  }
-  
-  /**
-   * Simplified dialog close detection - just clean up overlay button when needed
-   */
-  function setupDialogCloseDetection() {
-    log('📋 Setting up simple dialog close detection...');
-    
-    // Simple cleanup when dialog is removed
-    const dialogObserver = new MutationObserver((mutations) => {
-      mutations.forEach(mutation => {
-        mutation.removedNodes.forEach(node => {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            // Check if a dialog was removed
-            const isDialog = node.matches && (
-              node.matches('[role="dialog"]') || 
-              node.matches('[role="alertdialog"]')
-            );
-            
-            // Or if it contains dialogs
-            const containsDialog = node.querySelectorAll && 
-              node.querySelectorAll('[role="dialog"], [role="alertdialog"]').length > 0;
-              
-            if (isDialog || containsDialog) {
-              log('🚪 Share dialog closed - cleaning up overlay button');
-              
-              // Just remove overlay button - no need for complex state management
-              const overlayButton = document.getElementById('slide-url-copy-button-overlay');
-              if (overlayButton) {
-                overlayButton.remove();
-                log('✅ Overlay button removed - ready for next share button click');
-              }
-              
-              // Reset injection flag and clean up this observer
-              state.isInjecting = false;
-              dialogObserver.disconnect();
-            }
-          }
-        });
-      });
-    });
-    
-    // Observe for dialog removal
-    dialogObserver.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-  }
-  
-  /**
-   * Set up event-driven share button click detection - much more efficient!
-   */
-  function setupShareButtonClickDetection() {
-    log('🎯 Setting up share button click detection...');
-    
-    // Listen for clicks on the document
-    document.addEventListener('click', (event) => {
-      const target = event.target;
-      
-      // Check if clicked element matches share button criteria
-      if (target && 
-          target.tagName === 'DIV' && 
-          target.getAttribute('role') === 'button' && 
-          target.getAttribute('aria-label') && 
-          target.getAttribute('aria-label').startsWith('Share')) {
-        
-        log('🎯 SHARE BUTTON CLICKED!', {
-          element: target,
-          ariaLabel: target.getAttribute('aria-label'),
-          className: target.className
-        });
-        
-        // Wait for the share dialog to appear
-        waitForShareDialog();
-      }
-    }, true); // Use capture phase to catch the event early
-    
-    log('✅ Share button click detection set up');
-  }
-  
-  /**
-   * Wait for share dialog to appear after share button click
-   */
-  function waitForShareDialog() {
-    log('⏳ Waiting for share dialog to appear...');
-    
-    let attempts = 0;
-    let dialogFound = false; // Flag to prevent continued checking
-    const maxAttempts = 20; // Check for 2 seconds
-    
-    const checkForDialog = () => {
-      // Don't continue if we already found and processed a dialog
-      if (dialogFound) {
-        return;
-      }
-      
-      attempts++;
-      
-      // Look for dialog elements
-      const dialogs = document.querySelectorAll('[role="dialog"], [role="alertdialog"]');
-      
-      if (dialogs.length > 0) {
-        log('✅ Share dialog detected!', dialogs.length, 'dialogs found');
-        
-        // Find the dialog with share-related content
-        const shareDialog = Array.from(dialogs).find(dialog => {
-          const text = dialog.textContent.toLowerCase();
-          return text.includes('share') || text.includes('copy link') || text.includes('get link');
-        });
-        
-        if (shareDialog) {
-          log('🎯 Found share dialog with relevant content');
-          dialogFound = true; // Set flag to stop further checking
-          
-          // Process the share dialog
-          setTimeout(() => {
-            analyzeDialogButtons(shareDialog);
-          }, 200); // Small delay to ensure dialog is fully rendered
-          
-          return;
-        }
-        
-        // If we found dialogs but none with share content, try a more lenient check
-        if (dialogs.length > 0) {
-          log('🎯 Found dialog(s) but no share content detected, processing first dialog');
-          dialogFound = true; // Set flag to stop further checking
-          
-          setTimeout(() => {
-            analyzeDialogButtons(dialogs[0]);
-          }, 200);
-          
-          return;
-        }
-      }
-      
-      // Continue checking if not found and haven't exceeded max attempts
-      if (attempts < maxAttempts) {
-        setTimeout(checkForDialog, 100);
-      } else {
-        log('⚠️ Share dialog not found after', maxAttempts, 'attempts');
-      }
-    };
-    
-    // Start checking
-    setTimeout(checkForDialog, 100); // Small initial delay
-  }
-
-  /**
-   * Set up quick actions menu detection - NEW FEATURE
+   * Set up quick actions menu detection - Main feature
    */
   function setupQuickActionsMenuDetection() {
     log('🎯 Setting up quick actions menu detection...');
@@ -1576,14 +575,14 @@
   }
 
   /**
-   * Inject "Copy current slide link" option into quick actions menu
+   * Inject multiple slide options into quick actions menu
    */
   function injectCurrentSlideOption(menu) {
-    log('🚀 Injecting current slide option into quick actions menu...');
+    log('🚀 Injecting multiple slide options into quick actions menu...');
     
     // Check if we've already injected
     if (state.quickActionsInjected) {
-      log('ℹ️ Quick actions option already injected, skipping...');
+      log('ℹ️ Quick actions options already injected, skipping...');
       return;
     }
     
@@ -1604,38 +603,50 @@
       return;
     }
     
-    log('✅ Found "Copy link" menu item, creating current slide option...');
+    log('✅ Found "Copy link" menu item, creating slide options...');
     
-    // Check if our option already exists (double-check)
+    // Check if our options already exist (double-check)
     const existingOption = menu.querySelector('#current-slide-copy-option');
     if (existingOption) {
-      log('ℹ️ Current slide option already exists in DOM, marking as injected');
+      log('ℹ️ Current slide options already exist in DOM, marking as injected');
       state.quickActionsInjected = true;
       return;
     }
     
-    // Create new menu item for current slide
-    const currentSlideItem = createQuickActionsMenuItem();
+    // Create multiple menu items
+    const menuOptions = [
+      { id: 'current-slide-copy-option', text: 'Copy current slide link', mode: 'EDIT' },
+      { id: 'current-slide-present-option', text: 'Copy current slide presentation link', mode: 'PRESENT' },
+      { id: 'current-slide-preview-option', text: 'Copy current slide preview link', mode: 'PREVIEW' },
+      { id: 'current-slide-export-png', text: 'Export current slide as PNG', exportFormat: 'png' },
+      { id: 'current-slide-export-pdf', text: 'Export current slide as PDF', exportFormat: 'pdf' }
+    ];
     
-    // Insert after the "Copy link" item
-    copyLinkItem.insertAdjacentElement('afterend', currentSlideItem);
+    let lastInsertedItem = copyLinkItem;
+    
+    // Create and insert each menu item
+    for (const option of menuOptions) {
+      const menuItem = createQuickActionsMenuItem(option);
+      lastInsertedItem.insertAdjacentElement('afterend', menuItem);
+      lastInsertedItem = menuItem;
+    }
     
     // Mark as injected
     state.quickActionsInjected = true;
     
-    log('✅ Current slide option injected successfully - will not inject again');
+    log('✅ All slide options injected successfully - will not inject again');
   }
 
   /**
    * Create the "Copy current slide link" menu item for quick actions
    */
-  function createQuickActionsMenuItem() {
+  function createQuickActionsMenuItem(option) {
     // Create the main menu item container
     const menuItem = document.createElement('div');
     menuItem.className = 'goog-menuitem scb-sqa-menuitem';
     menuItem.setAttribute('role', 'menuitem');
     menuItem.setAttribute('aria-disabled', 'false');
-    menuItem.id = 'current-slide-copy-option';
+    menuItem.id = option.id;
     menuItem.style.userSelect = 'none';
     
     // Create menu item content
@@ -1651,7 +662,7 @@
     // Create text element
     const textDiv = document.createElement('div');
     textDiv.style.userSelect = 'none';
-    textDiv.textContent = 'Copy current slide link';
+    textDiv.textContent = option.text;
     
     // Create icon container
     const iconContainer = document.createElement('div');
@@ -1672,7 +683,7 @@
     menuItem.appendChild(content);
     
     // Add click handler
-    menuItem.addEventListener('click', createQuickActionsClickHandler(textDiv));
+    menuItem.addEventListener('click', createQuickActionsClickHandler(textDiv, option.mode, option.exportFormat));
     
     // Add hover effects
     menuItem.addEventListener('mouseenter', () => {
@@ -1689,44 +700,82 @@
   /**
    * Create click handler for quick actions menu item
    */
-  function createQuickActionsClickHandler(textElement) {
+  function createQuickActionsClickHandler(textElement, mode, exportFormat) {
     return async (event) => {
       event.preventDefault();
       event.stopPropagation();
       
-      log('🔗 Quick actions copy current slide button clicked!');
+      log('🔗 Quick actions option clicked:', { mode, exportFormat });
       
       try {
         let url;
         
         if (state.isShareIframe) {
           // We're in iframe, need to communicate with main frame
-          url = await requestSlideUrlFromMainFrame();
+          url = await requestSlideUrlFromMainFrame(mode, exportFormat);
         } else {
           // We're in main frame, can get URL directly
-          url = buildSlideUrl({ mode: 'EDIT' });
+          url = buildSlideUrl({ mode: mode, exportFormat: exportFormat });
         }
         
-        await navigator.clipboard.writeText(url);
-        
-        log('✅ Current slide URL copied successfully from quick actions:', url);
-        
-        // Show Google-style "Link copied" tooltip
-        showLinkCopiedTooltip();
+        if (exportFormat) {
+          // For exports, open the download URL in a new tab
+          window.open(url, '_blank');
+          showLinkCopiedTooltip(`${exportFormat.toUpperCase()} export started`);
+          log('✅ Export started successfully:', url);
+        } else {
+          // For copy actions, copy to clipboard
+          await navigator.clipboard.writeText(url);
+          showLinkCopiedTooltip('Link copied');
+          log('✅ Link copied successfully:', url);
+        }
         
         // Let Google handle menu closing naturally instead of forcing it
         // This prevents interference with Google's internal state management
         
       } catch (error) {
-        log('❌ Error copying current slide URL from quick actions:', error);
+        log('❌ Error handling quick actions option:', error);
+        showLinkCopiedTooltip('Error occurred');
       }
     };
   }
 
   /**
-   * Show Google-style black tooltip with "Link copied" message
+   * Promise-based iframe communication
    */
-  function showLinkCopiedTooltip() {
+  function requestSlideUrlFromMainFrame(mode = 'EDIT', exportFormat = null) {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Timeout waiting for slide URL'));
+      }, 5000);
+      
+      const messageHandler = (event) => {
+        if (event.data && event.data.type === 'SLIDE_URL_RESPONSE') {
+          clearTimeout(timeout);
+          window.removeEventListener('message', messageHandler);
+          
+          if (event.data.error) {
+            reject(new Error(event.data.error));
+          } else {
+            resolve(event.data.url);
+          }
+        }
+      };
+      
+      window.addEventListener('message', messageHandler);
+      
+      window.parent.postMessage({
+        type: 'GET_SLIDE_URL',
+        mode: mode,
+        exportFormat: exportFormat
+      }, '*');
+    });
+  }
+
+  /**
+   * Show Google-style black tooltip with customizable message
+   */
+  function showLinkCopiedTooltip(message = 'Link copied') {
     // Remove any existing tooltip first
     const existingTooltip = document.getElementById('slide-url-copied-tooltip');
     if (existingTooltip) {
@@ -1736,7 +785,7 @@
     // Create the tooltip element
     const tooltip = document.createElement('div');
     tooltip.id = 'slide-url-copied-tooltip';
-    tooltip.textContent = 'Link copied';
+    tooltip.textContent = message;
     
     // Apply Google-style tooltip styling
     tooltip.style.cssText = `
@@ -1778,7 +827,7 @@
       }, 200); // Wait for fade out animation
     }, 2000);
     
-    log('📢 Showed "Link copied" tooltip');
+    log('📢 Showed tooltip:', message);
   }
 
   // Start initialization

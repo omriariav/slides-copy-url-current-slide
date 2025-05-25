@@ -1,18 +1,19 @@
 # Google Slides Current Slide Link Extension
 
-A Chrome extension that seamlessly adds a "Copy current slide link" button to Google Slides, providing **two convenient ways** to quickly share direct links to the current slide.
+A Chrome extension that seamlessly adds **multiple slide sharing options** to Google Slides through the Quick Actions menu, providing convenient ways to share links and export current slides.
  
-## 🎯 Two Ways to Copy Current Slide Links
+## 🎯 Quick Actions Menu Integration
 
-### 1. Quick Actions Menu 
 <img src="screenshot2.png" alt="Quick Actions Menu Integration" width="400">
 
-Access "Copy current slide link" directly from Google's native quick sharing menu (arrow next to Share button).
+Access multiple slide options directly from Google's native quick sharing menu (arrow next to Share button):
 
-### 2. Share Dialog Integration  
-<img src="screenshot.png" alt="Share Dialog Integration" width="400">
-
-Find the button positioned next to Google's "Copy link" button in share dialogs.
+### Available Options:
+- **Copy current slide link** - Edit mode URL for collaboration
+- **Copy current slide presentation link** - Presentation mode URL for viewing  
+- **Copy current slide preview link** - Clean preview mode URL
+- **Export current slide as PNG** - Download current slide as PNG image
+- **Export current slide as PDF** - Download current slide as PDF document
 
 ## ⚠️ Disclaimer
 **This extension is not affiliated with, endorsed by, or connected to Google Inc. in any way.** This is an independent, open-source project created to enhance the Google Slides user experience.
@@ -38,13 +39,6 @@ Install directly from the Chrome Web Store:
 ## 📊 Browser Compatibility
 - **Chrome**: ✅ Fully supported (Manifest V3)
 - **Edge**: ✅ Should work (Chromium-based)
-
-## ⚠️ Known Issues
-
-### Share Dialog Double Button Injection
-**Issue**: Rapid share dialog openings may rarely cause duplicate buttons due to a race condition.
-
-**Workaround**: Close and reopen the share dialog. Quick Actions Menu (arrow next to Share button) is unaffected.
 
 ## 🤝 Contributing
 Contributions are welcome! Please feel free to submit issues or pull requests.
