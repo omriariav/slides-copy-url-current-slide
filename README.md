@@ -39,6 +39,13 @@ Install directly from the Chrome Web Store:
 - **Chrome**: ✅ Fully supported (Manifest V3)
 - **Edge**: ✅ Should work (Chromium-based)
 
+## ⚠️ Known Issues
+
+### Share Dialog Double Button Injection
+**Issue**: Rapid share dialog openings may rarely cause duplicate buttons due to a race condition.
+
+**Workaround**: Close and reopen the share dialog. Quick Actions Menu (arrow next to Share button) is unaffected.
+
 ## 🤝 Contributing
 Contributions are welcome! Please feel free to submit issues or pull requests.
 Feel free to reach out to me at omri.ariav at gmail dot com
