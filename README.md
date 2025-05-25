@@ -4,7 +4,7 @@ A Chrome extension that seamlessly adds **multiple slide sharing options** to Go
  
 ## 🎯 Quick Actions Menu Integration
 
-<img src="screenshot2.png" alt="Quick Actions Menu Integration" width="400">
+<img src="screenshot.png" alt="Quick Actions Menu Integration" width="400">
 
 Access multiple slide options directly from Google's native quick sharing menu (arrow next to Share button):
 
